@@ -148,11 +148,16 @@ function ImageUploader({ lessonId, existingUrl, onSave, showToast }) {
 
 // ── Lesson row ────────────────────────────────────────────────
 function LessonRow({ lesson, position, onUpdate, onDelete, expanded, onToggle, showToast }) {
-  const ContentIcon = CONTENT_TYPES.find(t => t.value === lesson.content_type)?.icon || FileText;
+  // Optimistic local state so type buttons highlight immediately on click
+  const [localType, setLocalType] = React.useState(lesson.content_type);
+  React.useEffect(() => setLocalType(lesson.content_type), [lesson.content_type]);
+
+  const effectiveType = localType;
+  const ContentIcon = CONTENT_TYPES.find(t => t.value === effectiveType)?.icon || FileText;
 
   // Parse image preview for header thumbnail
   const imageUrl = (() => {
-    if (lesson.content_type !== 'image' || !lesson.content) return null;
+    if (effectiveType !== 'image' || !lesson.content) return null;
     try { return JSON.parse(lesson.content).url; } catch { return lesson.content; }
   })();
 
@@ -193,10 +198,10 @@ function LessonRow({ lesson, position, onUpdate, onDelete, expanded, onToggle, s
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {CONTENT_TYPES.map(t => {
                 const Icon = t.icon;
-                const active = lesson.content_type === t.value;
+                const active = effectiveType === t.value;
                 return (
                   <button key={t.value}
-                    onClick={() => onUpdate(lesson.id, { content_type: t.value, content: '' })}
+                    onClick={() => { setLocalType(t.value); onUpdate(lesson.id, { content_type: t.value, content: '' }); }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px',
                       borderRadius: 'var(--radius-sm)',
@@ -212,7 +217,7 @@ function LessonRow({ lesson, position, onUpdate, onDelete, expanded, onToggle, s
           </div>
 
           {/* Content area by type */}
-          {lesson.content_type === 'image' ? (
+          {effectiveType === 'image' ? (
             <div className="form-group">
               <label className="form-label">Image</label>
               <ImageUploader
@@ -225,8 +230,8 @@ function LessonRow({ lesson, position, onUpdate, onDelete, expanded, onToggle, s
           ) : (
             <div className="form-group">
               <label className="form-label">
-                {lesson.content_type === 'video' ? 'Video URL'
-                  : lesson.content_type === 'quiz' ? 'Quiz instructions'
+                {effectiveType === 'video' ? 'Video URL'
+                  : effectiveType === 'quiz' ? 'Quiz instructions'
                   : 'Content'}
               </label>
               <InlineEdit
@@ -240,7 +245,7 @@ function LessonRow({ lesson, position, onUpdate, onDelete, expanded, onToggle, s
                 multiline
                 style={{ fontSize: 13, lineHeight: 1.7 }}
               />
-              {lesson.content_type === 'video' && lesson.content && (
+              {effectiveType === 'video' && lesson.content && (
                 <a href={lesson.content} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--cyan)', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 8 }}>
                   <ExternalLink size={12} /> Open video
                 </a>
