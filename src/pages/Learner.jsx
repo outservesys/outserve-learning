@@ -11,6 +11,16 @@ function useCurrentUser() {
   return profile || null;
 }
 
+const LEVEL_STYLES = {
+  Beginner:     { color: '#70D070', bg: 'rgba(112,208,112,0.14)' },
+  Intermediate: { color: '#FFB432', bg: 'rgba(255,180,50,0.14)'  },
+  Expert:       { color: '#FF7070', bg: 'rgba(255,112,112,0.14)' },
+};
+function LevelBadge({ level }) {
+  const s = LEVEL_STYLES[level] || LEVEL_STYLES.Beginner;
+  return level ? <span className="badge" style={{ background: s.bg, color: s.color }}>{level}</span> : null;
+}
+
 export function MyPlan() {
   const { assignments, modules, updateAssignment, categories } = useApp();
   const getCat = (key) => categories.find(c => c.key === key) || { label: key, color: '#888' };
@@ -74,6 +84,7 @@ export function MyPlan() {
                 <div className="step-meta" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                   <span className="badge" style={{ background: cat.color + '22', color: cat.color }}>{cat.label}</span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={11} />{formatDuration(a.module.duration)}</span>
+                  {a.module.level && <LevelBadge level={a.module.level} />}
                   {a.score != null && <span style={{ color: 'var(--cyan)' }}>Score: {a.score}%</span>}
                 </div>
                 <ProgressBar value={a.progress} />

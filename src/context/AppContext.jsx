@@ -86,6 +86,7 @@ export function AppProvider({ children }) {
     const { data, error } = await supabase.from('modules').insert([{
       title: mod.title, category: mod.category, duration: mod.duration,
       description: mod.description, lessons: mod.lessons, pass_mark: mod.passMark,
+      level: mod.level || 'Beginner',
     }]).select().single();
     if (error) { showToast('Failed to create module', 'error'); return null; }
     setModules(prev => [...prev, data].sort((a, b) => a.title.localeCompare(b.title)));
@@ -101,6 +102,7 @@ export function AppProvider({ children }) {
     if (updates.description !== undefined) patch.description = updates.description;
     if (updates.lessons     !== undefined) patch.lessons     = updates.lessons;
     if (updates.passMark    !== undefined) patch.pass_mark   = updates.passMark;
+    if (updates.level       !== undefined) patch.level       = updates.level;
     const { error } = await supabase.from('modules').update(patch).eq('id', id);
     if (error) { showToast('Failed to update module', 'error'); return; }
     setModules(prev => prev.map(m => m.id === id ? { ...m, ...patch } : m));

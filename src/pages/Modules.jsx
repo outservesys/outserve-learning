@@ -19,6 +19,17 @@ function CatBadge({ catKey, categories }) {
   );
 }
 
+const LEVEL_STYLES = {
+  Beginner:     { color: '#70D070', bg: 'rgba(112,208,112,0.14)' },
+  Intermediate: { color: '#FFB432', bg: 'rgba(255,180,50,0.14)'  },
+  Expert:       { color: '#FF7070', bg: 'rgba(255,112,112,0.14)' },
+};
+
+function LevelBadge({ level }) {
+  const s = LEVEL_STYLES[level] || LEVEL_STYLES.Beginner;
+  return <span className="badge" style={{ background: s.bg, color: s.color }}>{level}</span>;
+}
+
 // ── Manage Categories Modal ───────────────────────────────────
 function ManageCategoriesModal({ open, onClose }) {
   const { categories, addCategory, updateCategory, deleteCategory } = useApp();
@@ -129,8 +140,8 @@ function ModuleModal({ open, onClose, existing }) {
   const defaultCat = categories[0]?.key || '';
   const [form, setForm] = useState(
     existing
-      ? { title: existing.title, category: existing.category, duration: existing.duration, description: existing.description, lessons: existing.lessons, passMark: existing.pass_mark ?? existing.passMark ?? 80 }
-      : { title: '', category: defaultCat, duration: 60, description: '', lessons: 5, passMark: 80 }
+      ? { title: existing.title, category: existing.category, duration: existing.duration, description: existing.description, lessons: existing.lessons, passMark: existing.pass_mark ?? existing.passMark ?? 80, level: existing.level || 'Beginner' }
+      : { title: '', category: defaultCat, duration: 60, description: '', lessons: 5, passMark: 80, level: 'Beginner' }
   );
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -142,7 +153,7 @@ function ModuleModal({ open, onClose, existing }) {
       await addModule(form);
     }
     onClose();
-    if (!existing) setForm({ title: '', category: defaultCat, duration: 60, description: '', lessons: 5, passMark: 80 });
+    if (!existing) setForm({ title: '', category: defaultCat, duration: 60, description: '', lessons: 5, passMark: 80, level: 'Beginner' });
   };
 
   return (
@@ -178,6 +189,14 @@ function ModuleModal({ open, onClose, existing }) {
           <label className="form-label">Pass mark (%)</label>
           <input type="number" className="form-input" value={form.passMark} onChange={e => set('passMark', +e.target.value)} min={50} max={100} />
         </div>
+      </div>
+      <div className="form-group">
+        <label className="form-label">Level</label>
+        <select className="form-select" value={form.level} onChange={e => set('level', e.target.value)}>
+          <option value="Beginner">Beginner</option>
+          <option value="Intermediate">Intermediate</option>
+          <option value="Expert">Expert</option>
+        </select>
       </div>
     </Modal>
   );
@@ -242,8 +261,9 @@ export default function Modules() {
           const enrolled = assignments.filter(a => a.moduleId === m.id).length;
           return (
             <div key={m.id} className="module-card">
-              <div style={{ marginBottom: 10 }}>
+              <div style={{ marginBottom: 10, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                 <CatBadge catKey={m.category} categories={categories} />
+                {m.level && <LevelBadge level={m.level} />}
               </div>
               <div className="module-card-name">{m.title}</div>
               <div className="module-card-desc">{m.description}</div>
