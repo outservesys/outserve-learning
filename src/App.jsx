@@ -12,6 +12,7 @@ import Plans from './pages/Plans';
 import { Reports, Certificates } from './pages/Reports';
 import { MyPlan, Explore, MyCertificates } from './pages/Learner';
 import Profile from './pages/Profile';
+import ModuleBuilder from './pages/ModuleBuilder';
 
 function Spinner() {
   return (
@@ -54,6 +55,7 @@ function AppShell() {
             {/* Admin-only routes */}
             <Route path="/dashboard"    element={<AdminRoute><Dashboard /></AdminRoute>} />
             <Route path="/modules"      element={<AdminRoute><Modules /></AdminRoute>} />
+            <Route path="/modules/:id"  element={<AdminRoute><ModuleBuilder /></AdminRoute>} />
             <Route path="/staff"        element={<AdminRoute><Staff /></AdminRoute>} />
             <Route path="/plans"        element={<AdminRoute><Plans /></AdminRoute>} />
             <Route path="/reports"      element={<AdminRoute><Reports /></AdminRoute>} />

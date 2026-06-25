@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { Modal, formatDuration } from '../components/UI';
 import { Plus, Clock, Users, Search, Edit2, Trash2, Tag, Check, X } from 'lucide-react';
@@ -19,7 +20,7 @@ function CatBadge({ catKey, categories }) {
   );
 }
 
-const LEVEL_STYLES = {
+export const LEVEL_STYLES = {
   Beginner:     { color: '#70D070', bg: 'rgba(112,208,112,0.14)' },
   Intermediate: { color: '#FFB432', bg: 'rgba(255,180,50,0.14)'  },
   Expert:       { color: '#FF7070', bg: 'rgba(255,112,112,0.14)' },
@@ -211,10 +212,10 @@ function ModuleModal({ open, onClose, existing }) {
 // ── Main page ─────────────────────────────────────────────────
 export default function Modules() {
   const { modules, assignments, deleteModule, categories } = useApp();
+  const navigate = useNavigate();
   const [search, setSearch]         = useState('');
   const [filter, setFilter]         = useState('ALL');
   const [createOpen, setCreateOpen] = useState(false);
-  const [editTarget, setEditTarget] = useState(null);
   const [catOpen, setCatOpen]       = useState(false);
 
   const filtered = modules.filter(m => {
@@ -282,8 +283,8 @@ export default function Modules() {
                 <span>{m.lessons} lessons</span>
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-                <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => setEditTarget(m)}>
-                  <Edit2 size={12} /> Edit
+                <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => navigate(`/modules/${m.id}`)}>
+                  <Edit2 size={12} /> Build
                 </button>
                 <button className="btn btn-danger btn-sm" onClick={() => deleteModule(m.id)}>
                   <Trash2 size={12} />
@@ -297,7 +298,6 @@ export default function Modules() {
       {filtered.length === 0 && <div className="empty-state"><p>No modules match your search.</p></div>}
 
       <ModuleModal open={createOpen} onClose={() => setCreateOpen(false)} />
-      {editTarget && <ModuleModal open={true} onClose={() => setEditTarget(null)} existing={editTarget} />}
       <ManageCategoriesModal open={catOpen} onClose={() => setCatOpen(false)} />
     </div>
   );
