@@ -80,7 +80,10 @@ export function MyPlan() {
                 {a.status === 'completed' ? <CheckCircle size={14} /> : <BookOpen size={13} />}
               </div>
               <div className="step-info">
-                <div className="step-title">{a.module.title}</div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                  <div className="step-title">{a.module.title}</div>
+                  {a.module.module_code && <span style={{ fontSize: 10, fontFamily: 'monospace', color: 'var(--text-dim)' }}>{a.module.module_code}</span>}
+                </div>
                 <div className="step-meta" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                   <span className="badge" style={{ background: cat.color + '22', color: cat.color }}>{cat.label}</span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={11} />{formatDuration(a.module.duration)}</span>
@@ -163,6 +166,7 @@ export function Explore() {
             <div key={m.id} className="module-card">
               <div style={{ marginBottom: 10 }}><span className="badge" style={{ background: cat.color + '22', color: cat.color }}>{cat.label}</span></div>
               <div className="module-card-name">{m.title}</div>
+              {m.module_code && <div style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-dim)', marginBottom: 4 }}>{m.module_code}</div>}
               <div className="module-card-desc">{m.description}</div>
               <div className="module-card-meta">
                 <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={12} />{formatDuration(m.duration)}</span>

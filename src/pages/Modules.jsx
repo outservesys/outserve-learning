@@ -140,8 +140,8 @@ function ModuleModal({ open, onClose, existing }) {
   const defaultCat = categories[0]?.key || '';
   const [form, setForm] = useState(
     existing
-      ? { title: existing.title, category: existing.category, duration: existing.duration, description: existing.description, lessons: existing.lessons, passMark: existing.pass_mark ?? existing.passMark ?? 80, level: existing.level || 'Beginner' }
-      : { title: '', category: defaultCat, duration: 60, description: '', lessons: 5, passMark: 80, level: 'Beginner' }
+      ? { title: existing.title, category: existing.category, duration: existing.duration, description: existing.description, lessons: existing.lessons, passMark: existing.pass_mark ?? existing.passMark ?? 80, level: existing.level || 'Beginner', moduleCode: existing.module_code || '' }
+      : { title: '', category: defaultCat, duration: 60, description: '', lessons: 5, passMark: 80, level: 'Beginner', moduleCode: '' }
   );
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -153,15 +153,21 @@ function ModuleModal({ open, onClose, existing }) {
       await addModule(form);
     }
     onClose();
-    if (!existing) setForm({ title: '', category: defaultCat, duration: 60, description: '', lessons: 5, passMark: 80, level: 'Beginner' });
+    if (!existing) setForm({ title: '', category: defaultCat, duration: 60, description: '', lessons: 5, passMark: 80, level: 'Beginner', moduleCode: '' });
   };
 
   return (
     <Modal open={open} onClose={onClose} title={existing ? 'Edit module' : 'Create training module'}
       footer={<><button className="btn btn-ghost" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit}>{existing ? 'Save changes' : 'Create module'}</button></>}>
-      <div className="form-group">
-        <label className="form-label">Module title</label>
-        <input className="form-input" value={form.title} onChange={e => set('title', e.target.value)} placeholder="e.g. Cyber Security Essentials" autoFocus />
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">Module code</label>
+          <input className="form-input" value={form.moduleCode} onChange={e => set('moduleCode', e.target.value.toUpperCase())} placeholder="e.g. IT-001" style={{ fontFamily: 'monospace' }} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Module title</label>
+          <input className="form-input" value={form.title} onChange={e => set('title', e.target.value)} placeholder="e.g. Cyber Security Essentials" autoFocus />
+        </div>
       </div>
       <div className="form-row">
         <div className="form-group">
@@ -265,7 +271,10 @@ export default function Modules() {
                 <CatBadge catKey={m.category} categories={categories} />
                 {m.level && <LevelBadge level={m.level} />}
               </div>
-              <div className="module-card-name">{m.title}</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 2 }}>
+                <div className="module-card-name" style={{ marginBottom: 0 }}>{m.title}</div>
+              </div>
+              {m.module_code && <div style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-dim)', marginBottom: 6 }}>{m.module_code}</div>}
               <div className="module-card-desc">{m.description}</div>
               <div className="module-card-meta">
                 <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={12} /> {formatDuration(m.duration)}</span>
