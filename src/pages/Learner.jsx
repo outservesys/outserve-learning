@@ -5,12 +5,10 @@ import { ProgressBar, Badge, formatDuration, formatDate } from '../components/UI
 import { CheckCircle, Clock, Play, Award, BookOpen, Search } from 'lucide-react';
 import { CATEGORIES } from '../data/store';
 
-// Learner view: uses the first non-admin staff member as the "logged-in" learner.
-// Replace this with real auth (Supabase Auth) when you add login.
+// Returns the currently logged-in user's staff profile from Supabase Auth
 function useCurrentUser() {
-  const { profile } = require("../context/AuthContext").useAuth();
-  const { staff } = useApp();
-  return staff.find(s => !s.is_admin) || staff[0] || null;
+  const { profile } = useAuth();
+  return profile || null;
 }
 
 export function MyPlan() {
