@@ -89,7 +89,7 @@ export function AppProvider({ children }) {
       level: mod.level || 'Beginner',
       module_code: mod.moduleCode || null,
     }]).select().single();
-    if (error) { showToast('Failed to create module', 'error'); return null; }
+    if (error) { showToast('Failed to create module: ' + error.message, 'error'); console.error('addModule error:', error); return null; }
     setModules(prev => [...prev, data].sort((a, b) => a.title.localeCompare(b.title)));
     showToast('Module created');
     return data;
