@@ -12,17 +12,8 @@ export function Topbar() {
   const { view, setView, stats } = useApp();
   const { profile, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
-  const [photoUrl, setPhotoUrl] = useState(null);
-
-  useEffect(() => {
-    if (!profile?.id) return;
-    const { data } = supabase.storage.from('profiles').getPublicUrl(`avatars/${profile.id}`);
-    if (data?.publicUrl) {
-      const img = new Image();
-      img.onload = () => setPhotoUrl(data.publicUrl + '?t=' + Date.now());
-      img.src = data.publicUrl;
-    }
-  }, [profile?.id]);
+  // Use stored photo_url from profile — no Storage fetch needed
+  const photoUrl = profile?.photo_url || null;
 
   const switchView = (v) => {
     setView(v);

@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { ProgressBar, Badge, formatDuration, formatDate } from '../components/UI';
 import { CheckCircle, Clock, Play, Award, BookOpen, Search } from 'lucide-react';
-import { CATEGORIES } from '../data/store';
+
 
 // Returns the currently logged-in user's staff profile from Supabase Auth
 function useCurrentUser() {
@@ -12,7 +12,8 @@ function useCurrentUser() {
 }
 
 export function MyPlan() {
-  const { assignments, modules, updateAssignment } = useApp();
+  const { assignments, modules, updateAssignment, categories } = useApp();
+  const getCat = (key) => categories.find(c => c.key === key) || { label: key, color: '#888' };
   const currentUser = useCurrentUser();
 
   if (!currentUser) return <div style={{ color: 'var(--text-muted)', padding: 40 }}>Loading…</div>;
@@ -62,7 +63,7 @@ export function MyPlan() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {myAssignments.map(a => {
           const isOverdue = a.status !== 'completed' && new Date(a.dueDate) < new Date();
-          const cat = CATEGORIES[a.module.category];
+          const cat = getCat(a.module.category);
           return (
             <div key={a.id} className="plan-step" style={{ border: a.status === 'completed' ? '1px solid var(--cyan-border)' : isOverdue ? '1px solid rgba(255,107,107,0.3)' : '1px solid var(--border)' }}>
               <div className="step-num" style={a.status === 'completed' ? { background: 'var(--cyan)', color: 'var(--navy)', borderColor: 'var(--cyan)' } : {}}>
@@ -71,7 +72,7 @@ export function MyPlan() {
               <div className="step-info">
                 <div className="step-title">{a.module.title}</div>
                 <div className="step-meta" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                  <Badge category={a.module.category}>{cat?.label}</Badge>
+                  <span className="badge" style={{ background: cat.color + '22', color: cat.color }}>{cat.label}</span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={11} />{formatDuration(a.module.duration)}</span>
                   {a.score != null && <span style={{ color: 'var(--cyan)' }}>Score: {a.score}%</span>}
                 </div>
@@ -106,6 +107,8 @@ export function Explore() {
 
   if (!currentUser) return null;
   const myModuleIds = assignments.filter(a => a.staffId === currentUser.id).map(a => a.moduleId);
+  const { categories } = useApp();
+  const getCat = (key) => categories.find(c => c.key === key) || { label: key, color: '#888' };
 
   const filtered = modules.filter(m => {
     const matchCat    = filter === 'ALL' || m.category === filter;
@@ -144,10 +147,10 @@ export function Explore() {
       <div className="modules-grid">
         {filtered.map(m => {
           const assigned = myModuleIds.includes(m.id);
-          const cat = CATEGORIES[m.category];
+          const cat = getCat(m.category);
           return (
             <div key={m.id} className="module-card">
-              <div style={{ marginBottom: 10 }}><Badge category={m.category}>{cat.label}</Badge></div>
+              <div style={{ marginBottom: 10 }}><span className="badge" style={{ background: cat.color + '22', color: cat.color }}>{cat.label}</span></div>
               <div className="module-card-name">{m.title}</div>
               <div className="module-card-desc">{m.description}</div>
               <div className="module-card-meta">

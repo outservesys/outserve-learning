@@ -107,40 +107,75 @@ export default function Profile() {
   const [toastMsg, setToastMsg] = useState('');
   const fileRef = useRef();
 
-  // Load profile photo — getPublicUrl is synchronous in supabase-js v2
+  // Load photo: prefer stored URL in profile, fall back to Storage lookup
   useEffect(() => {
     if (!profile?.id) return;
+    if (profile.photo_url) {
+      setPhotoUrl(profile.photo_url + '?t=' + Date.now());
+      return;
+    }
+    // Try Storage public URL as fallback
     try {
       const { data } = supabase.storage.from('profiles').getPublicUrl(`avatars/${profile.id}`);
       if (data?.publicUrl) {
         const img = new Image();
         img.onload = () => setPhotoUrl(data.publicUrl + '?t=' + Date.now());
-        img.onerror = () => {}; // file doesn't exist yet — that's fine
+        img.onerror = () => {};
         img.src = data.publicUrl;
       }
     } catch (_) {}
-  }, [profile?.id]);
+  }, [profile?.id, profile?.photo_url]);
 
-  const showToast = (msg) => {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(''), 3000);
+  const showToast = (msg, type = 'success') => {
+    setToastMsg({ msg, type });
+    setTimeout(() => setToastMsg(''), 4000);
   };
 
   const handlePhotoChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !profile?.id) return;
-    if (file.size > 5 * 1024 * 1024) { showToast('Photo must be under 5MB'); return; }
+    if (file.size > 5 * 1024 * 1024) { showToast('Photo must be under 5MB', 'error'); return; }
     setUploading(true);
     try {
-      const { error } = await supabase.storage
+      // Upload to Storage
+      const path = `avatars/${profile.id}`;
+      const { error: uploadError } = await supabase.storage
         .from('profiles')
-        .upload(`avatars/${profile.id}`, file, { upsert: true, contentType: file.type });
-      if (error) { showToast('Upload failed: ' + error.message); return; }
-      const { data } = supabase.storage.from('profiles').getPublicUrl(`avatars/${profile.id}`);
-      setPhotoUrl(data.publicUrl + '?t=' + Date.now());
+        .upload(path, file, { upsert: true, contentType: file.type });
+
+      if (uploadError) {
+        showToast('Upload failed: ' + uploadError.message, 'error');
+        setUploading(false);
+        return;
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage.from('profiles').getPublicUrl(path);
+      const publicUrl = urlData?.publicUrl;
+
+      if (!publicUrl) {
+        showToast('Uploaded but could not get URL — check bucket is set to Public', 'error');
+        setUploading(false);
+        return;
+      }
+
+      // Persist URL in staff table so it loads on next login
+      const { error: dbError } = await supabase
+        .from('staff')
+        .update({ photo_url: publicUrl })
+        .eq('id', profile.id);
+
+      if (dbError) {
+        // Still show the photo even if DB save fails
+        console.warn('Could not save photo_url to staff table:', dbError.message);
+      }
+
+      const stamped = publicUrl + '?t=' + Date.now();
+      setPhotoUrl(stamped);
+      setProfile(prev => ({ ...prev, photo_url: publicUrl }));
       showToast('Photo updated');
     } catch (err) {
-      showToast('Upload failed');
+      showToast('Upload failed: ' + (err.message || 'unknown error'), 'error');
     } finally {
       setUploading(false);
     }
@@ -167,15 +202,17 @@ export default function Profile() {
 
   return (
     <div style={{ maxWidth: 780 }}>
-      {toastMsg && (
+      {toastMsg?.msg && (
         <div style={{
           position: 'fixed', bottom: 24, right: 24,
-          background: 'var(--navy-light)', border: '1px solid var(--cyan-border)',
-          color: 'var(--cyan)', padding: '12px 20px', borderRadius: 'var(--radius)',
+          background: 'var(--navy-light)',
+          border: `1px solid ${toastMsg.type === 'error' ? 'rgba(255,107,107,0.4)' : 'var(--cyan-border)'}`,
+          color: toastMsg.type === 'error' ? 'var(--danger)' : 'var(--cyan)',
+          padding: '12px 20px', borderRadius: 'var(--radius)',
           fontSize: 13, fontWeight: 500, zIndex: 999,
-          display: 'flex', alignItems: 'center', gap: 8,
+          display: 'flex', alignItems: 'center', gap: 8, maxWidth: 360,
         }}>
-          <Check size={14} /> {toastMsg}
+          <Check size={14} /> {toastMsg.msg}
         </div>
       )}
 

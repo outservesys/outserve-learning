@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { Modal, formatDuration } from '../components/UI';
 import { Plus, Server, Cloud, Shield, Users, BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
-import { CATEGORIES } from '../data/store';
+
 
 const ICONS = { server: Server, cloud: Cloud, shield: Shield, users: Users, book: BookOpen };
 
@@ -66,7 +66,7 @@ function CreatePlanModal({ open, onClose }) {
               <input type="checkbox" checked={form.moduleIds.includes(m.id)} readOnly />
               <div>
                 <div style={{ fontSize: 13, fontWeight: 500 }}>{m.title}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>{formatDuration(m.duration)} · {CATEGORIES[m.category]?.label}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>{formatDuration(m.duration)} · {getCat(m.category).label}</div>
               </div>
               {form.moduleIds.includes(m.id) && (
                 <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--cyan)' }}>#{form.moduleIds.indexOf(m.id) + 1}</span>
@@ -128,7 +128,7 @@ export default function Plans() {
                 <div style={{ borderTop: '1px solid var(--border)', padding: '16px 20px' }}>
                   {planModules.map((m, i) => {
                     const enrolled = assignments.filter(a => a.moduleId === m.id).length;
-                    const cat = CATEGORIES[m.category];
+                    const cat = getCat(m.category);
                     return (
                       <div key={m.id} className="plan-step">
                         <div className="step-num">{i + 1}</div>

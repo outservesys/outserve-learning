@@ -8,6 +8,7 @@ export function AppProvider({ children }) {
   const [staff, setStaff] = useState([]);
   const [plans, setPlans] = useState([]);          // [{...plan, moduleIds:[]}]
   const [assignments, setAssignments] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState('admin');
   const [toast, setToast] = useState(null);
@@ -27,12 +28,14 @@ export function AppProvider({ children }) {
         { data: assignData,      error: e3 },
         { data: planRows,        error: e4 },
         { data: planModuleRows,  error: e5 },
+        { data: catData,         error: e6 },
       ] = await Promise.all([
         supabase.from('staff').select('*').order('name'),
         supabase.from('modules').select('*').order('title'),
         supabase.from('assignments').select('*'),
         supabase.from('plans').select('*').order('title'),
         supabase.from('plan_modules').select('*').order('position'),
+        supabase.from('categories').select('*').order('position'),
       ]);
 
       for (const err of [e1, e2, e3, e4, e5]) {
@@ -65,6 +68,7 @@ export function AppProvider({ children }) {
 
       setStaff(staffData || []);
       setModules(modulesData || []);
+      setCategories(catData || []);
       setAssignments(normAssign);
       setPlans(normPlans);
     } catch (err) {
@@ -210,6 +214,35 @@ export function AppProvider({ children }) {
     showToast(`Plan assigned to ${staffIds.length} staff member${staffIds.length > 1 ? 's' : ''}`);
   };
 
+  // ── Categories ────────────────────────────────────────────
+  const addCategory = async (cat) => {
+    const key = cat.label.toUpperCase().replace(/[^A-Z0-9]/g, '_').slice(0, 20);
+    const { data, error } = await supabase.from('categories')
+      .insert([{ key, label: cat.label, color: cat.color, position: categories.length }])
+      .select().single();
+    if (error) { showToast('Failed to create category', 'error'); return null; }
+    setCategories(prev => [...prev, data]);
+    showToast('Category created');
+    return data;
+  };
+
+  const updateCategory = async (id, updates) => {
+    const { error } = await supabase.from('categories').update(updates).eq('id', id);
+    if (error) { showToast('Failed to update category', 'error'); return; }
+    setCategories(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+    showToast('Category updated');
+  };
+
+  const deleteCategory = async (id) => {
+    const cat = categories.find(c => c.id === id);
+    const inUse = modules.some(m => m.category === cat?.key);
+    if (inUse) { showToast('Cannot delete — modules are using this category', 'error'); return; }
+    const { error } = await supabase.from('categories').delete().eq('id', id);
+    if (error) { showToast('Failed to delete category', 'error'); return; }
+    setCategories(prev => prev.filter(c => c.id !== id));
+    showToast('Category deleted');
+  };
+
   // ── Derived helpers ────────────────────────────────────────
   const getStaffAssignments  = (staffId)  => assignments.filter(a => a.staffId  === staffId);
   const getModuleAssignments = (moduleId) => assignments.filter(a => a.moduleId === moduleId);
@@ -226,10 +259,11 @@ export function AppProvider({ children }) {
 
   return (
     <AppContext.Provider value={{
-      modules, staff, plans, assignments, loading, view, setView, toast,
+      modules, staff, plans, assignments, categories, loading, view, setView, toast,
       showToast, addAssignment, updateAssignment, addModule, updateModule,
       deleteStaff,
       deleteModule, addStaff, addPlan, assignPlanToStaff,
+      addCategory, updateCategory, deleteCategory,
       getStaffAssignments, getModuleAssignments, stats, refetch: fetchAll,
     }}>
       {children}

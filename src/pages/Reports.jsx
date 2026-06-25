@@ -2,11 +2,12 @@ import React from 'react';
 import { useApp } from '../context/AppContext';
 import { Avatar, ProgressRow, formatDate, formatDuration, Badge } from '../components/UI';
 import { Download, Award } from 'lucide-react';
-import { CATEGORIES } from '../data/store';
+
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 export function Reports() {
-  const { modules, staff, assignments } = useApp();
+  const { modules, staff, assignments, categories } = useApp();
+  const getCat = (key) => categories.find(c => c.key === key) || { label: key, color: '#888' };
 
   const byModule = modules.map(m => {
     const ma = assignments.filter(a => a.moduleId === m.id);
@@ -14,8 +15,8 @@ export function Reports() {
     return { ...m, enrolled: ma.length, completed: done, rate: ma.length ? Math.round((done / ma.length) * 100) : 0 };
   }).sort((a, b) => b.enrolled - a.enrolled);
 
-  const byCategory = Object.entries(CATEGORIES).map(([key, cat]) => {
-    const catModules = modules.filter(m => m.category === key);
+  const byCategory = categories.map(cat => {
+    const catModules = modules.filter(m => m.category === cat.key);
     const catAssign = assignments.filter(a => catModules.some(m => m.id === a.moduleId));
     const done = catAssign.filter(a => a.status === 'completed').length;
     return { name: cat.label, value: catAssign.length, completed: done, color: cat.color };
@@ -94,7 +95,7 @@ export function Reports() {
             {byModule.map(m => (
               <tr key={m.id}>
                 <td style={{ color: 'var(--text)', fontWeight: 500 }}>{m.title}</td>
-                <td><Badge category={m.category}>{CATEGORIES[m.category]?.label}</Badge></td>
+                <td><Badge category={m.category}>{getCat(m.category).label}</Badge></td>
                 <td>{m.enrolled}</td>
                 <td>{m.completed}</td>
                 <td style={{ width: 200 }}>

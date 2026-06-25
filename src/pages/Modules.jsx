@@ -1,31 +1,163 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Modal, Badge, formatDuration } from '../components/UI';
-import { Plus, Clock, Users, Search, Edit2, Trash2 } from 'lucide-react';
-import { CATEGORIES } from '../data/store';
+import { Modal, formatDuration } from '../components/UI';
+import { Plus, Clock, Users, Search, Edit2, Trash2, Tag, Check, X } from 'lucide-react';
 
-function CreateModuleModal({ open, onClose }) {
-  const { addModule } = useApp();
-  const [form, setForm] = useState({ title: '', category: 'IT', duration: 60, description: '', lessons: 5, passMark: 80 });
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const submit = () => {
-    if (!form.title) return;
-    addModule(form);
-    onClose();
-    setForm({ title: '', category: 'IT', duration: 60, description: '', lessons: 5, passMark: 80 });
-  };
+const PALETTE = [
+  '#00D4B8','#9090FF','#FFB432','#FF7070','#70D070',
+  '#FF9F50','#50C8FF','#FF6EB4','#A0C4FF','#B5EAD7',
+];
+
+// ── Badge using dynamic category ──────────────────────────────
+function CatBadge({ catKey, categories }) {
+  const cat = categories.find(c => c.key === catKey);
+  if (!cat) return <span className="badge badge-not_started">{catKey}</span>;
   return (
-    <Modal open={open} onClose={onClose} title="Create training module"
-      footer={<><button className="btn btn-ghost" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit}>Create module</button></>}>
+    <span className="badge" style={{ background: cat.color + '22', color: cat.color }}>
+      {cat.label}
+    </span>
+  );
+}
+
+// ── Manage Categories Modal ───────────────────────────────────
+function ManageCategoriesModal({ open, onClose }) {
+  const { categories, addCategory, updateCategory, deleteCategory } = useApp();
+  const [newLabel, setNewLabel]   = useState('');
+  const [newColor, setNewColor]   = useState(PALETTE[0]);
+  const [editingId, setEditingId] = useState(null);
+  const [editLabel, setEditLabel] = useState('');
+  const [editColor, setEditColor] = useState('');
+
+  const handleAdd = async () => {
+    if (!newLabel.trim()) return;
+    await addCategory({ label: newLabel.trim(), color: newColor });
+    setNewLabel('');
+    setNewColor(PALETTE[0]);
+  };
+
+  const startEdit = (cat) => { setEditingId(cat.id); setEditLabel(cat.label); setEditColor(cat.color); };
+  const saveEdit  = async () => { await updateCategory(editingId, { label: editLabel, color: editColor }); setEditingId(null); };
+  const cancelEdit = () => setEditingId(null);
+
+  return (
+    <Modal open={open} onClose={onClose} title="Manage categories"
+      footer={<button className="btn btn-ghost" onClick={onClose}>Done</button>}>
+
+      {/* Existing categories */}
+      <div style={{ marginBottom: 24 }}>
+        <div className="form-label" style={{ marginBottom: 10 }}>Current categories</div>
+        {categories.length === 0 && <p style={{ fontSize: 13, color: 'var(--text-dim)' }}>No categories yet.</p>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {categories.map(cat => (
+            <div key={cat.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+              {editingId === cat.id ? (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    className="form-input"
+                    value={editLabel}
+                    onChange={e => setEditLabel(e.target.value)}
+                    style={{ flex: 1 }}
+                    autoFocus
+                  />
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', width: 140 }}>
+                    {PALETTE.map(col => (
+                      <button
+                        key={col}
+                        onClick={() => setEditColor(col)}
+                        style={{ width: 20, height: 20, borderRadius: '50%', background: col, border: editColor === col ? '2px solid var(--text)' : '2px solid transparent', cursor: 'pointer' }}
+                      />
+                    ))}
+                  </div>
+                  <button className="btn btn-primary btn-sm btn-icon" onClick={saveEdit}><Check size={13} /></button>
+                  <button className="btn btn-ghost btn-sm btn-icon" onClick={cancelEdit}><X size={13} /></button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 12, height: 12, borderRadius: '50%', background: cat.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, fontWeight: 500, flex: 1 }}>{cat.label}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-dim)', marginRight: 8 }}>{cat.key}</span>
+                  <button className="btn btn-ghost btn-sm btn-icon" onClick={() => startEdit(cat)} title="Edit"><Edit2 size={13} /></button>
+                  <button className="btn btn-danger btn-sm btn-icon" onClick={() => deleteCategory(cat.id)} title="Delete"><Trash2 size={13} /></button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Add new */}
+      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 20 }}>
+        <div className="form-label" style={{ marginBottom: 10 }}>Add new category</div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexDirection: 'column' }}>
+          <input
+            className="form-input"
+            value={newLabel}
+            onChange={e => setNewLabel(e.target.value)}
+            placeholder="e.g. Leadership & Management"
+            onKeyDown={e => e.key === 'Enter' && handleAdd()}
+            style={{ width: '100%' }}
+          />
+          <div>
+            <div className="form-label" style={{ marginBottom: 6 }}>Colour</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {PALETTE.map(col => (
+                <button
+                  key={col}
+                  onClick={() => setNewColor(col)}
+                  style={{ width: 24, height: 24, borderRadius: '50%', background: col, border: newColor === col ? '2px solid var(--text)' : '2px solid transparent', cursor: 'pointer' }}
+                />
+              ))}
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button className="btn btn-primary" onClick={handleAdd} disabled={!newLabel.trim()}>
+              <Plus size={14} /> Add category
+            </button>
+            {newLabel && (
+              <span className="badge" style={{ background: newColor + '22', color: newColor }}>{newLabel}</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Create / Edit Module Modal ────────────────────────────────
+function ModuleModal({ open, onClose, existing }) {
+  const { addModule, updateModule, categories } = useApp();
+  const defaultCat = categories[0]?.key || '';
+  const [form, setForm] = useState(
+    existing
+      ? { title: existing.title, category: existing.category, duration: existing.duration, description: existing.description, lessons: existing.lessons, passMark: existing.pass_mark ?? existing.passMark ?? 80 }
+      : { title: '', category: defaultCat, duration: 60, description: '', lessons: 5, passMark: 80 }
+  );
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const submit = async () => {
+    if (!form.title) return;
+    if (existing) {
+      await updateModule(existing.id, form);
+    } else {
+      await addModule(form);
+    }
+    onClose();
+    if (!existing) setForm({ title: '', category: defaultCat, duration: 60, description: '', lessons: 5, passMark: 80 });
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title={existing ? 'Edit module' : 'Create training module'}
+      footer={<><button className="btn btn-ghost" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit}>{existing ? 'Save changes' : 'Create module'}</button></>}>
       <div className="form-group">
         <label className="form-label">Module title</label>
-        <input className="form-input" value={form.title} onChange={e => set('title', e.target.value)} placeholder="e.g. Cyber Security Essentials" />
+        <input className="form-input" value={form.title} onChange={e => set('title', e.target.value)} placeholder="e.g. Cyber Security Essentials" autoFocus />
       </div>
       <div className="form-row">
         <div className="form-group">
           <label className="form-label">Category</label>
           <select className="form-select" value={form.category} onChange={e => set('category', e.target.value)}>
-            {Object.entries(CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            {categories.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+            {categories.length === 0 && <option value="">No categories yet</option>}
           </select>
         </div>
         <div className="form-group">
@@ -51,17 +183,19 @@ function CreateModuleModal({ open, onClose }) {
   );
 }
 
+// ── Main page ─────────────────────────────────────────────────
 export default function Modules() {
-  const { modules, assignments, deleteModule } = useApp();
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('ALL');
+  const { modules, assignments, deleteModule, categories } = useApp();
+  const [search, setSearch]         = useState('');
+  const [filter, setFilter]         = useState('ALL');
   const [createOpen, setCreateOpen] = useState(false);
-
-  const cats = [{ key: 'ALL', label: 'All modules' }, ...Object.entries(CATEGORIES).map(([k, v]) => ({ key: k, label: v.label }))];
+  const [editTarget, setEditTarget] = useState(null);
+  const [catOpen, setCatOpen]       = useState(false);
 
   const filtered = modules.filter(m => {
-    const matchCat = filter === 'ALL' || m.category === filter;
-    const matchSearch = m.title.toLowerCase().includes(search.toLowerCase()) || m.description.toLowerCase().includes(search.toLowerCase());
+    const matchCat    = filter === 'ALL' || m.category === filter;
+    const matchSearch = m.title.toLowerCase().includes(search.toLowerCase()) ||
+                        m.description.toLowerCase().includes(search.toLowerCase());
     return matchCat && matchSearch;
   });
 
@@ -70,9 +204,16 @@ export default function Modules() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Training modules</h1>
-          <p className="page-sub">{modules.length} modules across {Object.keys(CATEGORIES).length} categories</p>
+          <p className="page-sub">{modules.length} modules across {categories.length} categories</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setCreateOpen(true)}><Plus size={15} /> New module</button>
+        <div className="page-actions">
+          <button className="btn btn-ghost" onClick={() => setCatOpen(true)}>
+            <Tag size={15} /> Manage categories
+          </button>
+          <button className="btn btn-primary" onClick={() => setCreateOpen(true)}>
+            <Plus size={15} /> New module
+          </button>
+        </div>
       </div>
 
       <div className="search-row">
@@ -81,20 +222,28 @@ export default function Modules() {
           <input placeholder="Search modules…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
       </div>
+
       <div className="filter-chips">
-        {cats.map(c => (
-          <button key={c.key} className={`chip ${filter === c.key ? 'active' : ''}`} onClick={() => setFilter(c.key)}>{c.label}</button>
+        <button className={`chip ${filter === 'ALL' ? 'active' : ''}`} onClick={() => setFilter('ALL')}>All modules</button>
+        {categories.map(c => (
+          <button
+            key={c.key}
+            className={`chip ${filter === c.key ? 'active' : ''}`}
+            onClick={() => setFilter(c.key)}
+            style={filter === c.key ? { background: c.color + '22', borderColor: c.color + '66', color: c.color } : {}}
+          >
+            {c.label}
+          </button>
         ))}
       </div>
 
       <div className="modules-grid">
         {filtered.map(m => {
           const enrolled = assignments.filter(a => a.moduleId === m.id).length;
-          const cat = CATEGORIES[m.category];
           return (
             <div key={m.id} className="module-card">
               <div style={{ marginBottom: 10 }}>
-                <Badge category={m.category}>{cat.label}</Badge>
+                <CatBadge catKey={m.category} categories={categories} />
               </div>
               <div className="module-card-name">{m.title}</div>
               <div className="module-card-desc">{m.description}</div>
@@ -104,7 +253,7 @@ export default function Modules() {
                 <span>{m.lessons} lessons</span>
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-                <button className="btn btn-ghost btn-sm" style={{ flex: 1 }}>
+                <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => setEditTarget(m)}>
                   <Edit2 size={12} /> Edit
                 </button>
                 <button className="btn btn-danger btn-sm" onClick={() => deleteModule(m.id)}>
@@ -116,11 +265,11 @@ export default function Modules() {
         })}
       </div>
 
-      {filtered.length === 0 && (
-        <div className="empty-state"><p>No modules match your search.</p></div>
-      )}
+      {filtered.length === 0 && <div className="empty-state"><p>No modules match your search.</p></div>}
 
-      <CreateModuleModal open={createOpen} onClose={() => setCreateOpen(false)} />
+      <ModuleModal open={createOpen} onClose={() => setCreateOpen(false)} />
+      {editTarget && <ModuleModal open={true} onClose={() => setEditTarget(null)} existing={editTarget} />}
+      <ManageCategoriesModal open={catOpen} onClose={() => setCatOpen(false)} />
     </div>
   );
 }
