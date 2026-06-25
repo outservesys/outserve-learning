@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Avatar, StatusBadge, ProgressBar, Modal } from '../components/UI';
+import { Avatar, ProgressBar, Modal } from '../components/UI';
 import AssignModal from '../components/AssignModal';
-import { Plus, Search, UserPlus } from 'lucide-react';
+import { Plus, Search, UserPlus, Trash2 } from 'lucide-react';
 
 const COLORS = ['#00D4B8', '#9090FF', '#FFB432', '#FF7070', '#70D070', '#FF9F50', '#50C8FF', '#FF6EB4'];
 
@@ -48,12 +48,32 @@ function AddStaffModal({ open, onClose }) {
   );
 }
 
+function DeleteStaffModal({ member, onClose }) {
+  const { deleteStaff, assignments } = useApp();
+  const assignmentCount = assignments.filter(a => a.staffId === member?.id).length;
+  const submit = async () => { await deleteStaff(member.id); onClose(); };
+  return (
+    <Modal open={!!member} onClose={onClose} title="Remove staff member"
+      footer={<><button className="btn btn-ghost" onClick={onClose}>Cancel</button><button className="btn btn-danger" onClick={submit}>Remove staff member</button></>}>
+      <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 16 }}>
+        Are you sure you want to remove <strong style={{ color: 'var(--text)' }}>{member?.name}</strong>? This cannot be undone.
+      </p>
+      {assignmentCount > 0 && (
+        <div style={{ background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.25)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', fontSize: 13, color: 'var(--danger)' }}>
+          This will also delete {assignmentCount} training assignment{assignmentCount !== 1 ? 's' : ''} for this staff member.
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 export default function Staff() {
-  const { staff, assignments, modules } = useApp();
+  const { staff, assignments } = useApp();
   const [search, setSearch] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignStaffId, setAssignStaffId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const filtered = staff.filter(s =>
     s.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -130,9 +150,14 @@ export default function Staff() {
                     {sa.length > 0 && !overdue && !allDone && <span className="badge badge-in_progress">In progress</span>}
                   </td>
                   <td>
-                    <button className="btn btn-ghost btn-sm" onClick={() => openAssign(s.id)}>
-                      <Plus size={12} /> Assign
-                    </button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn btn-ghost btn-sm" onClick={() => openAssign(s.id)}>
+                        <Plus size={12} /> Assign
+                      </button>
+                      <button className="btn btn-danger btn-sm btn-icon" onClick={() => setDeleteTarget(s)} title="Remove staff member">
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -143,6 +168,7 @@ export default function Staff() {
 
       <AddStaffModal open={addOpen} onClose={() => setAddOpen(false)} />
       <AssignModal open={assignOpen} onClose={() => setAssignOpen(false)} prefillStaffId={assignStaffId} />
+      <DeleteStaffModal member={deleteTarget} onClose={() => setDeleteTarget(null)} />
     </div>
   );
 }

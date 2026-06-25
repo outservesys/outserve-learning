@@ -123,6 +123,14 @@ export function AppProvider({ children }) {
     return data;
   };
 
+  const deleteStaff = async (id) => {
+    const { error } = await supabase.from('staff').delete().eq('id', id);
+    if (error) { showToast('Failed to remove staff member', 'error'); return; }
+    setStaff(prev => prev.filter(s => s.id !== id));
+    setAssignments(prev => prev.filter(a => a.staffId !== id));
+    showToast('Staff member removed');
+  };
+
   // ── Assignments ────────────────────────────────────────────
   const addAssignment = async (assignment) => {
     const row = {
@@ -220,6 +228,7 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       modules, staff, plans, assignments, loading, view, setView, toast,
       showToast, addAssignment, updateAssignment, addModule, updateModule,
+      deleteStaff,
       deleteModule, addStaff, addPlan, assignPlanToStaff,
       getStaffAssignments, getModuleAssignments, stats, refetch: fetchAll,
     }}>
