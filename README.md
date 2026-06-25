@@ -1,72 +1,79 @@
 # Outserve Learning Centre
 
-Fully branded LMS portal — React + Vite frontend, Supabase (Postgres) backend, deployed on Vercel.
+Fully branded LMS — React + Vite · Supabase (Postgres + Auth) · Vercel
 
 ---
 
-## 1 — Set up Supabase (5 minutes)
+## Setup (10 minutes)
 
-1. Go to [supabase.com](https://supabase.com) → **New project**
-2. Name it `outserve-learning`, pick a region close to the UK (eu-west-2)
-3. Once created, go to **SQL Editor → New query**
-4. Paste the entire contents of `supabase/schema.sql` and click **Run**
-   - This creates all tables, sets up RLS policies, and seeds your initial data
-5. Go to **Project Settings → API** and copy:
-   - **Project URL** → `VITE_SUPABASE_URL`
-   - **anon / public key** → `VITE_SUPABASE_ANON_KEY`
+### 1 — Supabase database & auth
 
----
+1. [supabase.com](https://supabase.com) → New project → name `outserve-learning`, region EU West
+2. **SQL Editor → New query** → paste `supabase/schema.sql` → Run
+3. **Authentication → Providers → Email** — make sure it's enabled
+4. *(Optional but recommended)* Disable email confirmation for internal use:
+   **Authentication → Settings → Email** → turn off "Enable email confirmations"
 
-## 2 — Deploy to Vercel (3 minutes)
+### 2 — Create your first admin account
 
-### Push to GitHub first
+Because only admins can create accounts via the app, bootstrap the first one manually:
+
+1. **Authentication → Users → Add user** — enter your email + password
+2. Copy the UUID shown for that user
+3. **SQL Editor → New query** — run:
+```sql
+insert into public.staff (user_id, name, role, dept, email, avatar, color, is_admin)
+values (
+  '<your-user-uuid>',
+  'Your Name',
+  'L&D Manager',
+  'HR',
+  'you@outserve.co.uk',
+  'YN',
+  '#00D4B8',
+  true
+);
+```
+
+4. Sign in at your Vercel URL — you're the first admin. All future accounts are created from inside the app.
+
+### 3 — Deploy to Vercel
+
 ```bash
-git init
-git add .
-git commit -m "Initial commit"
+git init && git add . && git commit -m "Initial commit"
 git remote add origin https://github.com/YOUR_USERNAME/outserve-learning.git
 git push -u origin main
 ```
 
-### Import to Vercel
-1. [vercel.com](https://vercel.com) → **Add New → Project → Import** your repo
-2. Before clicking Deploy, go to **Environment Variables** and add:
+1. [vercel.com](https://vercel.com) → **Add New → Project → Import** repo
+2. Add environment variables before deploying:
    ```
-   VITE_SUPABASE_URL      = https://xxxx.supabase.co
-   VITE_SUPABASE_ANON_KEY = eyJhbGci...
+   VITE_SUPABASE_URL       https://xxxx.supabase.co
+   VITE_SUPABASE_ANON_KEY  eyJhbGci...
    ```
-3. Click **Deploy** — live in ~60 seconds
+   (Found in Supabase → Project Settings → API)
+3. **Deploy** — live in ~60 seconds
 
-> Every `git push` auto-deploys. Vercel and Supabase are both free on hobby tier.
+---
+
+## User types
+
+| | Admin | Staff |
+|---|---|---|
+| Sign in | ✅ | ✅ |
+| View own learning plan | ✅ | ✅ |
+| View all staff progress | ✅ | ❌ |
+| Create / delete accounts | ✅ | ❌ |
+| Manage modules & plans | ✅ | ❌ |
+| Assign training | ✅ | ❌ |
+| View reports | ✅ | ❌ |
 
 ---
 
 ## Local development
 
 ```bash
-cp .env.example .env       # add your Supabase keys
+cp .env.example .env    # add your Supabase keys
 npm install
-npm run dev                 # http://localhost:5173
+npm run dev             # http://localhost:5173
 ```
-
----
-
-## Customisation
-
-| What | Where |
-|---|---|
-| Brand colours | `src/index.css` → `:root` variables |
-| Logo | Replace `public/outserve-logo.png` |
-| Default modules & staff | `supabase/schema.sql` seed section |
-| Logged-in learner | `src/pages/Learner.jsx` → `useCurrentUser()` (wire to Supabase Auth when ready) |
-| Database queries | `src/context/AppContext.jsx` |
-
----
-
-## Adding Supabase Auth (next step)
-
-When you're ready to add real logins:
-1. Enable **Email** provider in Supabase → Authentication → Providers
-2. Add a login page that calls `supabase.auth.signInWithPassword()`
-3. Replace `useCurrentUser()` in `Learner.jsx` with `supabase.auth.getUser()`
-4. Tighten RLS policies in `schema.sql` to `auth.uid() = staff.user_id`

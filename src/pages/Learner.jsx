@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { ProgressBar, Badge, formatDuration, formatDate } from '../components/UI';
 import { CheckCircle, Clock, Play, Award, BookOpen, Search } from 'lucide-react';
 import { CATEGORIES } from '../data/store';
@@ -7,6 +8,7 @@ import { CATEGORIES } from '../data/store';
 // Learner view: uses the first non-admin staff member as the "logged-in" learner.
 // Replace this with real auth (Supabase Auth) when you add login.
 function useCurrentUser() {
+  const { profile } = require("../context/AuthContext").useAuth();
   const { staff } = useApp();
   return staff.find(s => !s.is_admin) || staff[0] || null;
 }

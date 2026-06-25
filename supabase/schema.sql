@@ -10,6 +10,7 @@ create extension if not exists "uuid-ossp";
 
 create table if not exists public.staff (
   id          uuid primary key default uuid_generate_v4(),
+  user_id     uuid unique references auth.users(id) on delete cascade,
   name        text not null,
   role        text not null default '',
   dept        text not null default 'Technology',
@@ -24,7 +25,7 @@ create table if not exists public.modules (
   id          uuid primary key default uuid_generate_v4(),
   title       text not null,
   category    text not null check (category in ('IT', 'COMPLIANCE', 'SOFT')),
-  duration    integer not null default 60,   -- minutes
+  duration    integer not null default 60,
   description text not null default '',
   lessons     integer not null default 5,
   pass_mark   integer not null default 80,
@@ -65,42 +66,67 @@ create index if not exists assignments_staff_id_idx  on public.assignments(staff
 create index if not exists assignments_module_id_idx on public.assignments(module_id);
 create index if not exists assignments_status_idx    on public.assignments(status);
 create index if not exists plan_modules_plan_id_idx  on public.plan_modules(plan_id);
+create index if not exists staff_user_id_idx         on public.staff(user_id);
+
+-- ── Helper: is the calling user an admin? ───────────────────
+create or replace function public.is_admin()
+returns boolean
+language sql
+security definer
+stable
+as $$
+  select coalesce(
+    (select is_admin from public.staff where user_id = auth.uid()),
+    false
+  )
+$$;
 
 -- ── Row Level Security ───────────────────────────────────────
--- For now: allow all authenticated users full access.
--- Tighten per-row policies once you add Supabase Auth logins.
-
-alter table public.staff       enable row level security;
-alter table public.modules     enable row level security;
-alter table public.plans       enable row level security;
+alter table public.staff        enable row level security;
+alter table public.modules      enable row level security;
+alter table public.plans        enable row level security;
 alter table public.plan_modules enable row level security;
 alter table public.assignments  enable row level security;
 
--- Staff: anyone authenticated can read; admin flag gates writes (enforced in app)
-create policy "staff_select"  on public.staff       for select using (true);
-create policy "staff_insert"  on public.staff       for insert with check (true);
-create policy "staff_update"  on public.staff       for update using (true);
-create policy "staff_delete"  on public.staff       for delete using (true);
+-- Staff table:
+--   Any authenticated user can read all staff (needed for admin views)
+--   Only admins can insert/update/delete
+create policy "staff_select"  on public.staff for select to authenticated using (true);
+create policy "staff_insert"  on public.staff for insert to authenticated with check (public.is_admin());
+create policy "staff_update"  on public.staff for update to authenticated using (public.is_admin());
+create policy "staff_delete"  on public.staff for delete to authenticated using (public.is_admin());
 
-create policy "modules_select" on public.modules    for select using (true);
-create policy "modules_insert" on public.modules    for insert with check (true);
-create policy "modules_update" on public.modules    for update using (true);
-create policy "modules_delete" on public.modules    for delete using (true);
+-- Modules: admins manage, all authenticated users can read
+create policy "modules_select" on public.modules for select to authenticated using (true);
+create policy "modules_insert" on public.modules for insert to authenticated with check (public.is_admin());
+create policy "modules_update" on public.modules for update to authenticated using (public.is_admin());
+create policy "modules_delete" on public.modules for delete to authenticated using (public.is_admin());
 
-create policy "plans_select"  on public.plans       for select using (true);
-create policy "plans_insert"  on public.plans       for insert with check (true);
-create policy "plans_update"  on public.plans       for update using (true);
-create policy "plans_delete"  on public.plans       for delete using (true);
+-- Plans: admins manage, all authenticated users can read
+create policy "plans_select"  on public.plans for select to authenticated using (true);
+create policy "plans_insert"  on public.plans for insert to authenticated with check (public.is_admin());
+create policy "plans_update"  on public.plans for update to authenticated using (public.is_admin());
+create policy "plans_delete"  on public.plans for delete to authenticated using (public.is_admin());
 
-create policy "plan_modules_select" on public.plan_modules for select using (true);
-create policy "plan_modules_insert" on public.plan_modules for insert with check (true);
-create policy "plan_modules_update" on public.plan_modules for update using (true);
-create policy "plan_modules_delete" on public.plan_modules for delete using (true);
+create policy "plan_modules_select" on public.plan_modules for select to authenticated using (true);
+create policy "plan_modules_insert" on public.plan_modules for insert to authenticated with check (public.is_admin());
+create policy "plan_modules_update" on public.plan_modules for update to authenticated using (public.is_admin());
+create policy "plan_modules_delete" on public.plan_modules for delete to authenticated using (public.is_admin());
 
-create policy "assignments_select" on public.assignments for select using (true);
-create policy "assignments_insert" on public.assignments for insert with check (true);
-create policy "assignments_update" on public.assignments for update using (true);
-create policy "assignments_delete" on public.assignments for delete using (true);
+-- Assignments:
+--   Admins can do everything
+--   Staff can read and update ONLY their own assignments
+create policy "assignments_select" on public.assignments for select to authenticated
+  using (public.is_admin() or staff_id = (select id from public.staff where user_id = auth.uid()));
+
+create policy "assignments_insert" on public.assignments for insert to authenticated
+  with check (public.is_admin());
+
+create policy "assignments_update" on public.assignments for update to authenticated
+  using (public.is_admin() or staff_id = (select id from public.staff where user_id = auth.uid()));
+
+create policy "assignments_delete" on public.assignments for delete to authenticated
+  using (public.is_admin());
 
 -- ── Helpful views ────────────────────────────────────────────
 
@@ -142,3 +168,20 @@ from public.plans p
 join public.plan_modules pm on pm.plan_id  = p.id
 join public.modules      m  on m.id        = pm.module_id
 order by p.title, pm.position;
+
+-- ── First admin bootstrap ─────────────────────────────────────
+-- After running this schema, go to Supabase Dashboard → Authentication → Users
+-- and manually create your first admin user (email + password).
+-- Then run this query, replacing the values with your details:
+--
+-- insert into public.staff (user_id, name, role, dept, email, avatar, color, is_admin)
+-- values (
+--   '<paste the user UUID from Auth → Users>',
+--   'Your Name',
+--   'L&D Manager',
+--   'HR',
+--   'you@outserve.co.uk',
+--   'YN',
+--   '#00D4B8',
+--   true
+-- );

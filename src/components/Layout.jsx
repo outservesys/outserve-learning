@@ -1,13 +1,15 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard, BookOpen, Users, ClipboardList,
-  BarChart2, Award, Book, Compass, LogOut,
+  BarChart2, Award, Book, Compass, LogOut, UserCog,
 } from 'lucide-react';
 
 export function Topbar() {
   const { view, setView, stats } = useApp();
+  const { profile, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
 
   const switchView = (v) => {
@@ -17,22 +19,46 @@ export function Topbar() {
 
   return (
     <div className="topbar">
-      <div className="topbar-logo" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <img src="/outserve-logo.png" alt="Outserve" style={{ height: 26 }} />
         <div className="topbar-divider" />
         <span className="topbar-label">Learning Centre</span>
       </div>
+
       <div className="topbar-right">
-        {stats.overdue > 0 && (
+        {stats.overdue > 0 && isAdmin && (
           <span style={{ fontSize: 12, color: 'var(--danger)', background: 'rgba(255,107,107,0.12)', border: '1px solid rgba(255,107,107,0.25)', padding: '4px 10px', borderRadius: 20 }}>
             {stats.overdue} overdue
           </span>
         )}
-        <div className="view-toggle">
-          <button className={`view-btn ${view === 'admin' ? 'active' : ''}`} onClick={() => switchView('admin')}>Admin</button>
-          <button className={`view-btn ${view === 'learner' ? 'active' : ''}`} onClick={() => switchView('learner')}>My learning</button>
+
+        {/* Only show admin toggle to admin users */}
+        {isAdmin && (
+          <div className="view-toggle">
+            <button className={`view-btn ${view === 'admin' ? 'active' : ''}`} onClick={() => switchView('admin')}>Admin</button>
+            <button className={`view-btn ${view === 'learner' ? 'active' : ''}`} onClick={() => switchView('learner')}>My learning</button>
+          </div>
+        )}
+
+        {/* User info + sign out */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)' }}>{profile?.name || 'User'}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              {profile?.is_admin ? 'Admin' : 'Staff'}
+            </div>
+          </div>
+          <div className="avatar-btn" style={{ cursor: 'default' }}>{profile?.avatar || '?'}</div>
+          <button
+            onClick={signOut}
+            title="Sign out"
+            style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', padding: 6, borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}
+            onMouseOver={e => e.currentTarget.style.color = 'var(--text)'}
+            onMouseOut={e => e.currentTarget.style.color = 'var(--text-dim)'}
+          >
+            <LogOut size={16} />
+          </button>
         </div>
-        <button className="avatar-btn">JT</button>
       </div>
     </div>
   );
@@ -40,27 +66,29 @@ export function Topbar() {
 
 export function Sidebar() {
   const { view, stats } = useApp();
+  const { isAdmin } = useAuth();
 
   const adminNav = [
-    { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/modules', label: 'Modules', icon: BookOpen },
+    { to: '/dashboard',    label: 'Dashboard',      icon: LayoutDashboard },
+    { to: '/modules',      label: 'Modules',        icon: BookOpen },
     { group: 'People' },
-    { to: '/staff', label: 'Staff', icon: Users },
-    { to: '/plans', label: 'Learning plans', icon: ClipboardList },
+    { to: '/staff',        label: 'Staff',          icon: Users },
+    { to: '/plans',        label: 'Learning plans', icon: ClipboardList },
     { group: 'Reports' },
-    { to: '/reports', label: 'Progress report', icon: BarChart2 },
-    { to: '/certificates', label: 'Certificates', icon: Award },
+    { to: '/reports',      label: 'Progress report', icon: BarChart2 },
+    { to: '/certificates', label: 'Certificates',   icon: Award },
   ];
 
   const learnerNav = [
     { group: 'My learning' },
-    { to: '/my-plan', label: 'My plan', icon: Book },
-    { to: '/explore', label: 'Explore modules', icon: Compass },
+    { to: '/my-plan',          label: 'My plan',         icon: Book },
+    { to: '/explore',          label: 'Explore modules', icon: Compass },
     { group: 'Achievements' },
-    { to: '/my-certificates', label: 'My certificates', icon: Award },
+    { to: '/my-certificates',  label: 'My certificates', icon: Award },
   ];
 
-  const nav = view === 'admin' ? adminNav : learnerNav;
+  // Staff users only see their own learner nav
+  const nav = (isAdmin && view === 'admin') ? adminNav : learnerNav;
 
   return (
     <div className="sidebar">
