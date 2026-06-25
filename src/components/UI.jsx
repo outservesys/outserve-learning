@@ -31,9 +31,18 @@ export function StatusBadge({ assignment }) {
 }
 
 export function Avatar({ person, size = 32 }) {
+  if (person?.photo_url) {
+    return (
+      <img
+        src={person.photo_url}
+        alt={person.name || ''}
+        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '1px solid var(--border)' }}
+      />
+    );
+  }
   return (
-    <div className="avatar" style={{ width: size, height: size, background: person.color + '22', color: person.color, fontSize: size < 36 ? 11 : 14 }}>
-      {person.avatar}
+    <div className="avatar" style={{ width: size, height: size, background: (person?.color || '#00D4B8') + '22', color: person?.color || 'var(--cyan)', fontSize: size < 36 ? 11 : 14 }}>
+      {person?.avatar || '?'}
     </div>
   );
 }
