@@ -94,6 +94,8 @@ export function Sidebar() {
   const { isAdmin } = useAuth();
 
   const adminNav = [
+    { to: '/profile',      label: 'My profile',      icon: UserCircle },
+    { group: 'Overview' },
     { to: '/dashboard',    label: 'Dashboard',       icon: LayoutDashboard },
     { to: '/modules',      label: 'Modules',         icon: BookOpen },
     { group: 'People' },
@@ -102,18 +104,15 @@ export function Sidebar() {
     { group: 'Reports' },
     { to: '/reports',      label: 'Progress report', icon: BarChart2 },
     { to: '/certificates', label: 'Certificates',    icon: Award },
-    { group: 'Account' },
-    { to: '/profile',      label: 'My profile',      icon: UserCircle },
   ];
 
   const learnerNav = [
+    { to: '/profile',         label: 'My profile',      icon: UserCircle },
     { group: 'My learning' },
     { to: '/my-plan',         label: 'My plan',         icon: Book },
     { to: '/explore',         label: 'Explore modules', icon: Compass },
     { group: 'Achievements' },
     { to: '/my-certificates', label: 'My certificates', icon: Award },
-    { group: 'Account' },
-    { to: '/profile',         label: 'My profile',      icon: UserCircle },
   ];
 
   const nav = (isAdmin && view === 'admin') ? adminNav : learnerNav;
