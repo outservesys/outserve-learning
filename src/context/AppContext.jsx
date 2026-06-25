@@ -216,11 +216,17 @@ export function AppProvider({ children }) {
 
   // ── Categories ────────────────────────────────────────────
   const addCategory = async (cat) => {
-    const key = cat.label.toUpperCase().replace(/[^A-Z0-9]/g, '_').slice(0, 20);
+    // Generate a unique key: label slug + timestamp suffix to avoid collisions
+    const slug = cat.label.toUpperCase().replace(/[^A-Z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').slice(0, 15);
+    const key  = slug + '_' + Date.now().toString(36).toUpperCase();
     const { data, error } = await supabase.from('categories')
       .insert([{ key, label: cat.label, color: cat.color, position: categories.length }])
       .select().single();
-    if (error) { showToast('Failed to create category', 'error'); return null; }
+    if (error) {
+      showToast('Failed to create category: ' + error.message, 'error');
+      console.error('addCategory error:', error);
+      return null;
+    }
     setCategories(prev => [...prev, data]);
     showToast('Category created');
     return data;
