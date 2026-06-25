@@ -18,10 +18,10 @@ const CONTENT_TYPES = [
 
 // ── Helpers ───────────────────────────────────────────────────
 function parseBlocks(raw) {
-  if (!raw) return [{ id: Date.now(), type: 'text', value: '' }];
+  if (!raw || raw.trim() === '') return [];
   try {
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed.length ? parsed : [{ id: Date.now(), type: 'text', value: '' }];
+    if (Array.isArray(parsed)) return parsed;
   } catch {}
   // Legacy plain string — wrap in a single text block
   return [{ id: Date.now(), type: 'text', value: raw }];
@@ -117,6 +117,11 @@ function ImageBlock({ block, lessonId, onChange, onDelete, showToast }) {
 function RichEditor({ lessonId, rawContent, onSave, showToast }) {
   const [blocks, setBlocks] = useState(() => parseBlocks(rawContent));
 
+  // Re-parse if the lesson content changes externally (e.g. switching type back to text)
+  useEffect(() => {
+    setBlocks(parseBlocks(rawContent));
+  }, [lessonId]);
+
   // Debounced save
   const saveTimer = useRef(null);
   const save = (newBlocks) => {
@@ -131,9 +136,14 @@ function RichEditor({ lessonId, rawContent, onSave, showToast }) {
   };
 
   const addBlock = (type, afterId) => {
-    const idx = blocks.findIndex(b => b.id === afterId);
     const newBlock = { id: Date.now(), type, value: '', url: '', caption: '' };
-    const next = [...blocks.slice(0, idx + 1), newBlock, ...blocks.slice(idx + 1)];
+    let next;
+    if (afterId === null) {
+      next = [...blocks, newBlock];
+    } else {
+      const idx = blocks.findIndex(b => b.id === afterId);
+      next = [...blocks.slice(0, idx + 1), newBlock, ...blocks.slice(idx + 1)];
+    }
     setBlocks(next);
     save(next);
   };
@@ -147,6 +157,16 @@ function RichEditor({ lessonId, rawContent, onSave, showToast }) {
 
   return (
     <div>
+      {blocks.length === 0 && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+          <button onClick={() => addBlock('text', null)} className="btn btn-ghost btn-sm" style={{ fontSize: 12 }}>
+            <AlignLeft size={13} /> Add text
+          </button>
+          <button onClick={() => addBlock('image', null)} className="btn btn-ghost btn-sm" style={{ fontSize: 12 }}>
+            <Image size={13} /> Add image
+          </button>
+        </div>
+      )}
       {blocks.map((block, i) => (
         <div key={block.id} style={{ marginBottom: 12 }}>
           {block.type === 'text' ? (
