@@ -3,10 +3,19 @@ import { useApp } from '../context/AppContext';
 import { ProgressBar, Badge, formatDuration, formatDate } from '../components/UI';
 import { CheckCircle, Clock, Play, Award, BookOpen, Search } from 'lucide-react';
 import { CATEGORIES } from '../data/store';
-import { currentUser } from '../data/store';
+
+// Learner view: uses the first non-admin staff member as the "logged-in" learner.
+// Replace this with real auth (Supabase Auth) when you add login.
+function useCurrentUser() {
+  const { staff } = useApp();
+  return staff.find(s => !s.is_admin) || staff[0] || null;
+}
 
 export function MyPlan() {
   const { assignments, modules, updateAssignment } = useApp();
+  const currentUser = useCurrentUser();
+
+  if (!currentUser) return <div style={{ color: 'var(--text-muted)', padding: 40 }}>Loading…</div>;
 
   const myAssignments = assignments
     .filter(a => a.staffId === currentUser.id)
@@ -15,13 +24,13 @@ export function MyPlan() {
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 
   const done = myAssignments.filter(a => a.status === 'completed').length;
-  const pct = myAssignments.length ? Math.round((done / myAssignments.length) * 100) : 0;
+  const pct  = myAssignments.length ? Math.round((done / myAssignments.length) * 100) : 0;
 
-  const simulateProgress = (a) => {
+  const simulateProgress = async (a) => {
     const newProgress = Math.min(100, a.progress + 20);
-    const newStatus = newProgress >= 100 ? 'completed' : 'in_progress';
-    const score = newProgress >= 100 ? Math.floor(Math.random() * 20) + 78 : null;
-    updateAssignment(a.id, { progress: newProgress, status: newStatus, ...(score ? { score } : {}) });
+    const newStatus   = newProgress >= 100 ? 'completed' : 'in_progress';
+    const score       = newProgress >= 100 ? Math.floor(Math.random() * 20) + 78 : null;
+    await updateAssignment(a.id, { progress: newProgress, status: newStatus, ...(score != null ? { score } : {}) });
   };
 
   return (
@@ -38,15 +47,9 @@ export function MyPlan() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 24 }}>
-        <div className="stat-card">
-          <div className="stat-label">Assigned</div>
-          <div className="stat-value">{myAssignments.length}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Completed</div>
-          <div className="stat-value" style={{ color: 'var(--cyan)' }}>{done}</div>
-        </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
+        <div className="stat-card"><div className="stat-label">Assigned</div><div className="stat-value">{myAssignments.length}</div></div>
+        <div className="stat-card"><div className="stat-label">Completed</div><div className="stat-value" style={{ color: 'var(--cyan)' }}>{done}</div></div>
         <div className="stat-card">
           <div className="stat-label">Overdue</div>
           <div className="stat-value" style={{ color: myAssignments.filter(a => a.status !== 'completed' && new Date(a.dueDate) < new Date()).length > 0 ? 'var(--danger)' : 'var(--text)' }}>
@@ -70,7 +73,7 @@ export function MyPlan() {
                 <div className="step-meta" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                   <Badge category={a.module.category}>{cat?.label}</Badge>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={11} />{formatDuration(a.module.duration)}</span>
-                  {a.score && <span style={{ color: 'var(--cyan)' }}>Score: {a.score}%</span>}
+                  {a.score != null && <span style={{ color: 'var(--cyan)' }}>Score: {a.score}%</span>}
                 </div>
                 <ProgressBar value={a.progress} />
               </div>
@@ -79,7 +82,7 @@ export function MyPlan() {
                   <span style={{ fontSize: 12, color: 'var(--cyan)' }}>✓ Complete</span>
                 ) : (
                   <button className="btn btn-primary btn-sm" onClick={() => simulateProgress(a)}>
-                    <Play size={12} /> {a.status === 'in_progress' ? 'Continue' : 'Start'}
+                    <Play size={12} />{a.status === 'in_progress' ? 'Continue' : 'Start'}
                   </button>
                 )}
                 <span style={{ fontSize: 11, color: isOverdue ? 'var(--danger)' : 'var(--text-dim)' }}>
@@ -97,30 +100,34 @@ export function MyPlan() {
 
 export function Explore() {
   const { modules, assignments, addAssignment } = useApp();
+  const currentUser = useCurrentUser();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('ALL');
 
+  if (!currentUser) return null;
   const myModuleIds = assignments.filter(a => a.staffId === currentUser.id).map(a => a.moduleId);
 
   const filtered = modules.filter(m => {
-    const matchCat = filter === 'ALL' || m.category === filter;
+    const matchCat    = filter === 'ALL' || m.category === filter;
     const matchSearch = m.title.toLowerCase().includes(search.toLowerCase());
     return matchCat && matchSearch;
   });
 
-  const requestModule = (m) => {
+  const requestModule = async (m) => {
     if (myModuleIds.includes(m.id)) return;
     const due = new Date(); due.setDate(due.getDate() + 30);
-    addAssignment({ staffId: currentUser.id, moduleId: m.id, assignedDate: new Date().toISOString().split('T')[0], dueDate: due.toISOString().split('T')[0], status: 'not_started', progress: 0, score: null });
+    await addAssignment({
+      staffId: currentUser.id, moduleId: m.id,
+      assignedDate: new Date().toISOString().split('T')[0],
+      dueDate: due.toISOString().split('T')[0],
+      status: 'not_started', progress: 0, score: null,
+    });
   };
 
   return (
     <div>
       <div className="page-header">
-        <div>
-          <h1 className="page-title">Explore modules</h1>
-          <p className="page-sub">Browse all available training</p>
-        </div>
+        <div><h1 className="page-title">Explore modules</h1><p className="page-sub">Browse all available training</p></div>
       </div>
       <div className="search-row">
         <div className="search-input">
@@ -140,22 +147,20 @@ export function Explore() {
           const cat = CATEGORIES[m.category];
           return (
             <div key={m.id} className="module-card">
-              <div style={{ marginBottom: 10 }}>
-                <Badge category={m.category}>{cat.label}</Badge>
-              </div>
+              <div style={{ marginBottom: 10 }}><Badge category={m.category}>{cat.label}</Badge></div>
               <div className="module-card-name">{m.title}</div>
               <div className="module-card-desc">{m.description}</div>
               <div className="module-card-meta">
                 <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={12} />{formatDuration(m.duration)}</span>
                 <span>{m.lessons} lessons</span>
-                <span>Pass: {m.passMark}%</span>
+                <span>Pass: {m.pass_mark}%</span>
               </div>
               <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
                 {assigned ? (
-                  <span style={{ fontSize: 12, color: 'var(--cyan)', display: 'flex', alignItems: 'center', gap: 6 }}><CheckCircle size={13} /> In your plan</span>
+                  <span style={{ fontSize: 12, color: 'var(--cyan)', display: 'flex', alignItems: 'center', gap: 6 }}><CheckCircle size={13} />In your plan</span>
                 ) : (
                   <button className="btn btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center' }} onClick={() => requestModule(m)}>
-                    <Play size={12} /> Add to my plan
+                    <Play size={12} />Add to my plan
                   </button>
                 )}
               </div>
@@ -169,18 +174,17 @@ export function Explore() {
 
 export function MyCertificates() {
   const { assignments, modules } = useApp();
+  const currentUser = useCurrentUser();
+  if (!currentUser) return null;
   const myDone = assignments.filter(a => a.staffId === currentUser.id && a.status === 'completed' && a.score != null);
 
   return (
     <div>
       <div className="page-header">
-        <div>
-          <h1 className="page-title">My certificates</h1>
-          <p className="page-sub">{myDone.length} certificate{myDone.length !== 1 ? 's' : ''} earned</p>
-        </div>
+        <div><h1 className="page-title">My certificates</h1><p className="page-sub">{myDone.length} certificate{myDone.length !== 1 ? 's' : ''} earned</p></div>
       </div>
       {myDone.length === 0 && <div className="empty-state"><Award size={40} /><p>No certificates yet — complete a module to earn one.</p></div>}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 14 }}>
         {myDone.map(a => {
           const mod = modules.find(m => m.id === a.moduleId);
           if (!mod) return null;
@@ -198,7 +202,7 @@ export function MyCertificates() {
                 </div>
               </div>
               <button className="btn btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 14 }}>
-                <Award size={12} /> Download PDF
+                <Award size={12} />Download PDF
               </button>
             </div>
           );

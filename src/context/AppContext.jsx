@@ -1,125 +1,227 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { defaultModules, defaultStaff, defaultPlans, defaultAssignments } from '../data/store';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
 
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
-  const [modules, setModules] = useState(() => {
-    const saved = localStorage.getItem('os_modules');
-    return saved ? JSON.parse(saved) : defaultModules;
-  });
-  const [staff, setStaff] = useState(() => {
-    const saved = localStorage.getItem('os_staff');
-    return saved ? JSON.parse(saved) : defaultStaff;
-  });
-  const [plans, setPlans] = useState(() => {
-    const saved = localStorage.getItem('os_plans');
-    return saved ? JSON.parse(saved) : defaultPlans;
-  });
-  const [assignments, setAssignments] = useState(() => {
-    const saved = localStorage.getItem('os_assignments');
-    return saved ? JSON.parse(saved) : defaultAssignments;
-  });
-  const [view, setView] = useState('admin'); // 'admin' | 'learner'
+  const [modules, setModules] = useState([]);
+  const [staff, setStaff] = useState([]);
+  const [plans, setPlans] = useState([]);          // [{...plan, moduleIds:[]}]
+  const [assignments, setAssignments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState('admin');
   const [toast, setToast] = useState(null);
-
-  useEffect(() => { localStorage.setItem('os_modules', JSON.stringify(modules)); }, [modules]);
-  useEffect(() => { localStorage.setItem('os_staff', JSON.stringify(staff)); }, [staff]);
-  useEffect(() => { localStorage.setItem('os_plans', JSON.stringify(plans)); }, [plans]);
-  useEffect(() => { localStorage.setItem('os_assignments', JSON.stringify(assignments)); }, [assignments]);
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), 3200);
   };
 
-  const addAssignment = (assignment) => {
-    const newA = { ...assignment, id: 'a' + Date.now() };
-    setAssignments(prev => [...prev, newA]);
-    showToast('Module assigned successfully');
-    return newA;
+  // ── Fetch all data ─────────────────────────────────────────
+  const fetchAll = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [
+        { data: staffData,       error: e1 },
+        { data: modulesData,     error: e2 },
+        { data: assignData,      error: e3 },
+        { data: planRows,        error: e4 },
+        { data: planModuleRows,  error: e5 },
+      ] = await Promise.all([
+        supabase.from('staff').select('*').order('name'),
+        supabase.from('modules').select('*').order('title'),
+        supabase.from('assignments').select('*'),
+        supabase.from('plans').select('*').order('title'),
+        supabase.from('plan_modules').select('*').order('position'),
+      ]);
+
+      for (const err of [e1, e2, e3, e4, e5]) {
+        if (err) throw err;
+      }
+
+      // Normalise snake_case → camelCase for assignments
+      const normAssign = (assignData || []).map(a => ({
+        id: a.id,
+        staffId: a.staff_id,
+        moduleId: a.module_id,
+        assignedDate: a.assigned_date,
+        dueDate: a.due_date,
+        status: a.status,
+        progress: a.progress,
+        score: a.score,
+      }));
+
+      // Attach moduleIds array to each plan
+      const normPlans = (planRows || []).map(p => ({
+        id: p.id,
+        title: p.title,
+        description: p.description,
+        icon: p.icon,
+        moduleIds: (planModuleRows || [])
+          .filter(pm => pm.plan_id === p.id)
+          .sort((a, b) => a.position - b.position)
+          .map(pm => pm.module_id),
+      }));
+
+      setStaff(staffData || []);
+      setModules(modulesData || []);
+      setAssignments(normAssign);
+      setPlans(normPlans);
+    } catch (err) {
+      console.error('fetchAll error:', err);
+      showToast('Failed to load data from Supabase', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // ── Modules ────────────────────────────────────────────────
+  const addModule = async (mod) => {
+    const { data, error } = await supabase.from('modules').insert([{
+      title: mod.title, category: mod.category, duration: mod.duration,
+      description: mod.description, lessons: mod.lessons, pass_mark: mod.passMark,
+    }]).select().single();
+    if (error) { showToast('Failed to create module', 'error'); return null; }
+    setModules(prev => [...prev, data].sort((a, b) => a.title.localeCompare(b.title)));
+    showToast('Module created');
+    return data;
   };
 
-  const updateAssignment = (id, updates) => {
-    setAssignments(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
-  };
-
-  const addModule = (mod) => {
-    const newMod = { ...mod, id: 'm' + Date.now() };
-    setModules(prev => [...prev, newMod]);
-    showToast('Module created successfully');
-    return newMod;
-  };
-
-  const updateModule = (id, updates) => {
-    setModules(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
+  const updateModule = async (id, updates) => {
+    const patch = {};
+    if (updates.title       !== undefined) patch.title       = updates.title;
+    if (updates.category    !== undefined) patch.category    = updates.category;
+    if (updates.duration    !== undefined) patch.duration    = updates.duration;
+    if (updates.description !== undefined) patch.description = updates.description;
+    if (updates.lessons     !== undefined) patch.lessons     = updates.lessons;
+    if (updates.passMark    !== undefined) patch.pass_mark   = updates.passMark;
+    const { error } = await supabase.from('modules').update(patch).eq('id', id);
+    if (error) { showToast('Failed to update module', 'error'); return; }
+    setModules(prev => prev.map(m => m.id === id ? { ...m, ...patch } : m));
     showToast('Module updated');
   };
 
-  const deleteModule = (id) => {
+  const deleteModule = async (id) => {
+    const { error } = await supabase.from('modules').delete().eq('id', id);
+    if (error) { showToast('Failed to delete module', 'error'); return; }
     setModules(prev => prev.filter(m => m.id !== id));
     setAssignments(prev => prev.filter(a => a.moduleId !== id));
     showToast('Module deleted');
   };
 
-  const addStaff = (member) => {
-    const newS = { ...member, id: 's' + Date.now() };
-    setStaff(prev => [...prev, newS]);
+  // ── Staff ──────────────────────────────────────────────────
+  const addStaff = async (member) => {
+    const { data, error } = await supabase.from('staff').insert([{
+      name: member.name, role: member.role, dept: member.dept,
+      email: member.email, avatar: member.avatar, color: member.color,
+    }]).select().single();
+    if (error) { showToast('Failed to add staff member', 'error'); return null; }
+    setStaff(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
     showToast('Staff member added');
-    return newS;
+    return data;
   };
 
-  const addPlan = (plan) => {
-    const newP = { ...plan, id: 'p' + Date.now() };
-    setPlans(prev => [...prev, newP]);
+  // ── Assignments ────────────────────────────────────────────
+  const addAssignment = async (assignment) => {
+    const row = {
+      staff_id:      assignment.staffId,
+      module_id:     assignment.moduleId,
+      assigned_date: assignment.assignedDate,
+      due_date:      assignment.dueDate,
+      status:        assignment.status || 'not_started',
+      progress:      assignment.progress || 0,
+      score:         assignment.score || null,
+    };
+    const { data, error } = await supabase.from('assignments').insert([row]).select().single();
+    if (error) {
+      if (error.code === '23505') showToast('This module is already assigned to that staff member', 'error');
+      else showToast('Failed to assign module', 'error');
+      return null;
+    }
+    const norm = { id: data.id, staffId: data.staff_id, moduleId: data.module_id, assignedDate: data.assigned_date, dueDate: data.due_date, status: data.status, progress: data.progress, score: data.score };
+    setAssignments(prev => [...prev, norm]);
+    showToast('Module assigned successfully');
+    return norm;
+  };
+
+  const updateAssignment = async (id, updates) => {
+    const patch = {};
+    if (updates.status   !== undefined) patch.status   = updates.status;
+    if (updates.progress !== undefined) patch.progress = updates.progress;
+    if (updates.score    !== undefined) patch.score    = updates.score;
+    if (updates.dueDate  !== undefined) patch.due_date = updates.dueDate;
+    const { error } = await supabase.from('assignments').update(patch).eq('id', id);
+    if (error) { showToast('Failed to update assignment', 'error'); return; }
+    setAssignments(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
+  };
+
+  // ── Plans ──────────────────────────────────────────────────
+  const addPlan = async (plan) => {
+    const { data: planData, error: planError } = await supabase
+      .from('plans').insert([{ title: plan.title, description: plan.description, icon: plan.icon || 'server' }])
+      .select().single();
+    if (planError) { showToast('Failed to create plan', 'error'); return null; }
+
+    if (plan.moduleIds?.length) {
+      const pmRows = plan.moduleIds.map((mid, i) => ({ plan_id: planData.id, module_id: mid, position: i }));
+      await supabase.from('plan_modules').insert(pmRows);
+    }
+
+    const newPlan = { ...planData, moduleIds: plan.moduleIds || [] };
+    setPlans(prev => [...prev, newPlan]);
     showToast('Learning plan created');
-    return newP;
+    return newPlan;
   };
 
-  const assignPlanToStaff = (planId, staffIds, dueDate) => {
+  const assignPlanToStaff = async (planId, staffIds, firstDueDate) => {
     const plan = plans.find(p => p.id === planId);
     if (!plan) return;
-    const newAssignments = [];
+    const rows = [];
     staffIds.forEach(staffId => {
       plan.moduleIds.forEach((moduleId, i) => {
         const exists = assignments.find(a => a.staffId === staffId && a.moduleId === moduleId);
         if (!exists) {
-          const due = new Date(dueDate);
+          const due = new Date(firstDueDate);
           due.setDate(due.getDate() + i * 14);
-          newAssignments.push({
-            id: 'a' + Date.now() + Math.random(),
-            staffId,
-            moduleId,
-            assignedDate: new Date().toISOString().split('T')[0],
-            dueDate: due.toISOString().split('T')[0],
-            status: 'not_started',
-            progress: 0,
-            score: null,
+          rows.push({
+            staff_id: staffId, module_id: moduleId,
+            assigned_date: new Date().toISOString().split('T')[0],
+            due_date: due.toISOString().split('T')[0],
+            status: 'not_started', progress: 0, score: null,
           });
         }
       });
     });
-    setAssignments(prev => [...prev, ...newAssignments]);
-    showToast(`Learning plan assigned to ${staffIds.length} staff member${staffIds.length > 1 ? 's' : ''}`);
+    if (!rows.length) { showToast('All modules already assigned', 'error'); return; }
+    const { data, error } = await supabase.from('assignments').insert(rows).select();
+    if (error) { showToast('Failed to assign plan', 'error'); return; }
+    const normed = data.map(d => ({ id: d.id, staffId: d.staff_id, moduleId: d.module_id, assignedDate: d.assigned_date, dueDate: d.due_date, status: d.status, progress: d.progress, score: d.score }));
+    setAssignments(prev => [...prev, ...normed]);
+    showToast(`Plan assigned to ${staffIds.length} staff member${staffIds.length > 1 ? 's' : ''}`);
   };
 
-  const getStaffAssignments = (staffId) => assignments.filter(a => a.staffId === staffId);
+  // ── Derived helpers ────────────────────────────────────────
+  const getStaffAssignments  = (staffId)  => assignments.filter(a => a.staffId  === staffId);
   const getModuleAssignments = (moduleId) => assignments.filter(a => a.moduleId === moduleId);
 
   const stats = {
-    totalStaff: staff.length,
-    totalModules: modules.length,
-    completions: assignments.filter(a => a.status === 'completed').length,
-    overdue: assignments.filter(a => a.status !== 'completed' && new Date(a.dueDate) < new Date()).length,
-    completionRate: assignments.length ? Math.round((assignments.filter(a => a.status === 'completed').length / assignments.length) * 100) : 0,
+    totalStaff:      staff.length,
+    totalModules:    modules.length,
+    completions:     assignments.filter(a => a.status === 'completed').length,
+    overdue:         assignments.filter(a => a.status !== 'completed' && new Date(a.dueDate) < new Date()).length,
+    completionRate:  assignments.length
+      ? Math.round((assignments.filter(a => a.status === 'completed').length / assignments.length) * 100)
+      : 0,
   };
 
   return (
     <AppContext.Provider value={{
-      modules, staff, plans, assignments, view, setView, toast,
+      modules, staff, plans, assignments, loading, view, setView, toast,
       showToast, addAssignment, updateAssignment, addModule, updateModule,
       deleteModule, addStaff, addPlan, assignPlanToStaff,
-      getStaffAssignments, getModuleAssignments, stats,
+      getStaffAssignments, getModuleAssignments, stats, refetch: fetchAll,
     }}>
       {children}
     </AppContext.Provider>

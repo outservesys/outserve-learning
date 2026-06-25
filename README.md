@@ -1,61 +1,52 @@
 # Outserve Learning Centre
 
-Fully branded learning management portal for Outserve staff. Built with React + Vite.
+Fully branded LMS portal — React + Vite frontend, Supabase (Postgres) backend, deployed on Vercel.
 
 ---
 
-## Deploy to Vercel (recommended — free, 5 minutes)
+## 1 — Set up Supabase (5 minutes)
 
-### Option A: GitHub → Vercel (best for ongoing updates)
-
-1. **Push to GitHub**
-   - Go to [github.com/new](https://github.com/new) and create a new **private** repository
-   - In your terminal, from this project folder:
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial commit"
-   git remote add origin https://github.com/YOUR_USERNAME/outserve-learning.git
-   git push -u origin main
-   ```
-
-2. **Import to Vercel**
-   - Go to [vercel.com](https://vercel.com) → Sign up / Log in (free)
-   - Click **Add New → Project**
-   - Click **Import** next to your GitHub repo
-   - Vercel auto-detects Vite — no settings to change
-   - Click **Deploy**
-   - ✅ Live at `outserve-learning.vercel.app` in ~60 seconds
-
-3. **Custom domain (optional)**
-   - In Vercel dashboard → your project → **Settings → Domains**
-   - Add `learning.outserve.co.uk` or any domain you own
-
-> Every time you `git push`, Vercel auto-deploys. Pull requests get preview URLs.
+1. Go to [supabase.com](https://supabase.com) → **New project**
+2. Name it `outserve-learning`, pick a region close to the UK (eu-west-2)
+3. Once created, go to **SQL Editor → New query**
+4. Paste the entire contents of `supabase/schema.sql` and click **Run**
+   - This creates all tables, sets up RLS policies, and seeds your initial data
+5. Go to **Project Settings → API** and copy:
+   - **Project URL** → `VITE_SUPABASE_URL`
+   - **anon / public key** → `VITE_SUPABASE_ANON_KEY`
 
 ---
 
-### Option B: Vercel CLI (no GitHub needed)
+## 2 — Deploy to Vercel (3 minutes)
 
+### Push to GitHub first
 ```bash
-npm install -g vercel   # install once
-vercel                  # deploy (follow prompts)
-vercel --prod           # promote to production
+git init
+git add .
+git commit -m "Initial commit"
+git remote add origin https://github.com/YOUR_USERNAME/outserve-learning.git
+git push -u origin main
 ```
+
+### Import to Vercel
+1. [vercel.com](https://vercel.com) → **Add New → Project → Import** your repo
+2. Before clicking Deploy, go to **Environment Variables** and add:
+   ```
+   VITE_SUPABASE_URL      = https://xxxx.supabase.co
+   VITE_SUPABASE_ANON_KEY = eyJhbGci...
+   ```
+3. Click **Deploy** — live in ~60 seconds
+
+> Every `git push` auto-deploys. Vercel and Supabase are both free on hobby tier.
 
 ---
 
 ## Local development
 
 ```bash
+cp .env.example .env       # add your Supabase keys
 npm install
-npm run dev             # http://localhost:5173
-```
-
-## Production build
-
-```bash
-npm run build           # output → dist/
+npm run dev                 # http://localhost:5173
 ```
 
 ---
@@ -63,19 +54,19 @@ npm run build           # output → dist/
 ## Customisation
 
 | What | Where |
-|------|-------|
-| Brand colours | `src/index.css` — edit `:root` CSS variables |
+|---|---|
+| Brand colours | `src/index.css` → `:root` variables |
 | Logo | Replace `public/outserve-logo.png` |
-| Modules & staff data | `src/data/store.js` |
-| Logged-in user | `currentUser` in `src/data/store.js` |
-| Backend API | Replace localStorage calls in `src/context/AppContext.jsx` |
+| Default modules & staff | `supabase/schema.sql` seed section |
+| Logged-in learner | `src/pages/Learner.jsx` → `useCurrentUser()` (wire to Supabase Auth when ready) |
+| Database queries | `src/context/AppContext.jsx` |
 
 ---
 
-## Tech stack
+## Adding Supabase Auth (next step)
 
-- React 18 + React Router v6
-- Vite 6
-- Recharts (charts)
-- Lucide React (icons)
-- localStorage for data persistence (swap for API calls when ready)
+When you're ready to add real logins:
+1. Enable **Email** provider in Supabase → Authentication → Providers
+2. Add a login page that calls `supabase.auth.signInWithPassword()`
+3. Replace `useCurrentUser()` in `Learner.jsx` with `supabase.auth.getUser()`
+4. Tighten RLS policies in `schema.sql` to `auth.uid() = staff.user_id`
