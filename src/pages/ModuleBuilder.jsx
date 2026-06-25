@@ -1,18 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
-import { Modal, formatDuration } from '../components/UI';
+import { formatDuration } from '../components/UI';
 import {
   ArrowLeft, Plus, Trash2, Edit2, GripVertical, Check, X,
-  BookOpen, FileText, Video, ClipboardList, ChevronDown, ChevronUp, Save,
+  BookOpen, FileText, Video, ClipboardList, ChevronDown, ChevronUp,
+  Image, Upload, ExternalLink,
 } from 'lucide-react';
 import { LEVEL_STYLES } from './Modules';
 
 const CONTENT_TYPES = [
-  { value: 'text',  label: 'Reading',    icon: FileText },
-  { value: 'video', label: 'Video',      icon: Video },
-  { value: 'quiz',  label: 'Quiz',       icon: ClipboardList },
+  { value: 'text',  label: 'Reading', icon: FileText },
+  { value: 'video', label: 'Video',   icon: Video },
+  { value: 'image', label: 'Image',   icon: Image },
+  { value: 'quiz',  label: 'Quiz',    icon: ClipboardList },
 ];
 
 // ── Inline editable text ──────────────────────────────────────
@@ -28,7 +30,7 @@ function InlineEdit({ value, onSave, placeholder, multiline = false, style = {} 
     return (
       <div>
         {multiline
-          ? <textarea className="form-textarea" value={draft} onChange={e => setDraft(e.target.value)} autoFocus style={{ ...style, minHeight: 100 }} />
+          ? <textarea className="form-textarea" value={draft} onChange={e => setDraft(e.target.value)} autoFocus style={{ ...style, minHeight: 120 }} />
           : <input className="form-input" value={draft} onChange={e => setDraft(e.target.value)} autoFocus style={style}
               onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel(); }} />
         }
@@ -40,41 +42,139 @@ function InlineEdit({ value, onSave, placeholder, multiline = false, style = {} 
     );
   }
   return (
-    <div
-      onClick={() => setEditing(true)}
-      style={{ cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 8, ...style }}
-      title="Click to edit"
-    >
-      <span style={{ flex: 1, color: value ? 'inherit' : 'var(--text-dim)' }}>{value || placeholder}</span>
+    <div onClick={() => setEditing(true)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 8, ...style }} title="Click to edit">
+      <span style={{ flex: 1, color: value ? 'inherit' : 'var(--text-dim)', whiteSpace: multiline ? 'pre-wrap' : 'normal' }}>{value || placeholder}</span>
       <Edit2 size={13} color="var(--text-dim)" style={{ flexShrink: 0, marginTop: 2, opacity: 0.6 }} />
     </div>
   );
 }
 
-// ── Lesson row ────────────────────────────────────────────────
-function LessonRow({ lesson, position, onUpdate, onDelete, expanded, onToggle }) {
-  const ContentIcon = CONTENT_TYPES.find(t => t.value === lesson.content_type)?.icon || FileText;
+// ── Image uploader ────────────────────────────────────────────
+function ImageUploader({ lessonId, existingUrl, onSave, showToast }) {
+  const [uploading, setUploading] = useState(false);
+  const [preview, setPreview]     = useState(existingUrl || null);
+  const [caption, setCaption]     = useState('');
+  const fileRef = useRef();
+
+  // parse stored JSON: { url, caption }
+  useEffect(() => {
+    if (existingUrl) {
+      try {
+        const parsed = JSON.parse(existingUrl);
+        setPreview(parsed.url || existingUrl);
+        setCaption(parsed.caption || '');
+      } catch {
+        setPreview(existingUrl);
+      }
+    }
+  }, [existingUrl]);
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { showToast('Image must be under 10MB', 'error'); return; }
+
+    setUploading(true);
+    const path = `lesson-images/${lessonId}-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+    const { error: uploadError } = await supabase.storage
+      .from('profiles')
+      .upload(path, file, { upsert: false, contentType: file.type });
+
+    if (uploadError) {
+      showToast('Upload failed: ' + uploadError.message, 'error');
+      setUploading(false);
+      return;
+    }
+
+    const { data } = supabase.storage.from('profiles').getPublicUrl(path);
+    const url = data.publicUrl;
+    setPreview(url);
+    onSave(JSON.stringify({ url, caption }));
+    showToast('Image uploaded');
+    setUploading(false);
+  };
+
+  const saveCaption = (cap) => {
+    setCaption(cap);
+    if (preview) onSave(JSON.stringify({ url: preview, caption: cap }));
+  };
+
+  const removeImage = () => {
+    setPreview(null);
+    setCaption('');
+    onSave('');
+  };
 
   return (
-    <div style={{
-      background: 'var(--surface)', border: '1px solid var(--border)',
-      borderRadius: 'var(--radius)', overflow: 'hidden', marginBottom: 10,
-    }}>
-      {/* Header row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', cursor: 'pointer' }}
-        onClick={onToggle}>
+    <div>
+      {preview ? (
+        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
+          <img src={preview} alt="Lesson" style={{ width: '100%', maxHeight: 400, objectFit: 'contain', background: 'rgba(0,0,0,0.2)', display: 'block' }} />
+          <div style={{ padding: '12px 14px', borderTop: '1px solid var(--border)' }}>
+            <div className="form-label" style={{ marginBottom: 6 }}>Caption (optional)</div>
+            <InlineEdit value={caption} onSave={saveCaption} placeholder="Add a caption…" style={{ fontSize: 13 }} />
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
+                <Upload size={13} /> Replace image
+              </button>
+              <button className="btn btn-danger btn-sm" onClick={removeImage}>
+                <Trash2 size={13} /> Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div
+          onClick={() => fileRef.current?.click()}
+          style={{
+            border: '2px dashed var(--border-strong)', borderRadius: 'var(--radius-lg)',
+            padding: '40px 20px', textAlign: 'center', cursor: 'pointer',
+            transition: 'all 0.15s', background: uploading ? 'var(--cyan-dim)' : 'transparent',
+          }}
+          onMouseOver={e => e.currentTarget.style.borderColor = 'var(--cyan)'}
+          onMouseOut={e => e.currentTarget.style.borderColor = 'var(--border-strong)'}
+        >
+          <Image size={28} color="var(--text-dim)" style={{ marginBottom: 12, opacity: 0.5 }} />
+          <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 6 }}>
+            {uploading ? 'Uploading…' : 'Click to upload an image'}
+          </p>
+          <p style={{ fontSize: 12, color: 'var(--text-dim)' }}>PNG, JPG, GIF, WebP — max 10MB</p>
+        </div>
+      )}
+      <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFile} />
+    </div>
+  );
+}
+
+// ── Lesson row ────────────────────────────────────────────────
+function LessonRow({ lesson, position, onUpdate, onDelete, expanded, onToggle, showToast }) {
+  const ContentIcon = CONTENT_TYPES.find(t => t.value === lesson.content_type)?.icon || FileText;
+
+  // Parse image preview for header thumbnail
+  const imageUrl = (() => {
+    if (lesson.content_type !== 'image' || !lesson.content) return null;
+    try { return JSON.parse(lesson.content).url; } catch { return lesson.content; }
+  })();
+
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden', marginBottom: 10 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', cursor: 'pointer' }} onClick={onToggle}>
         <GripVertical size={15} color="var(--text-dim)" style={{ flexShrink: 0, opacity: 0.4 }} />
         <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--cyan-dim)', border: '1px solid var(--cyan-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, color: 'var(--cyan)', flexShrink: 0 }}>
           {position}
         </div>
-        <ContentIcon size={15} color="var(--text-dim)" style={{ flexShrink: 0 }} />
-        <span style={{ flex: 1, fontSize: 14, fontWeight: 500 }}>{lesson.title || <span style={{ color: 'var(--text-dim)' }}>Untitled lesson</span>}</span>
+        {imageUrl
+          ? <img src={imageUrl} alt="" style={{ width: 28, height: 28, borderRadius: 4, objectFit: 'cover', flexShrink: 0 }} />
+          : <ContentIcon size={15} color="var(--text-dim)" style={{ flexShrink: 0 }} />
+        }
+        <span style={{ flex: 1, fontSize: 14, fontWeight: 500 }}>
+          {lesson.title || <span style={{ color: 'var(--text-dim)' }}>Untitled lesson</span>}
+        </span>
         <span style={{ fontSize: 11, color: 'var(--text-dim)', marginRight: 8 }}>
           {CONTENT_TYPES.find(t => t.value === lesson.content_type)?.label || 'Reading'}
         </span>
-        <button className="btn btn-danger btn-sm btn-icon"
-          onClick={e => { e.stopPropagation(); onDelete(lesson.id); }}
-          title="Delete lesson">
+        <button className="btn btn-danger btn-sm btn-icon" onClick={e => { e.stopPropagation(); onDelete(lesson.id); }} title="Delete lesson">
           <Trash2 size={13} />
         </button>
         {expanded ? <ChevronUp size={15} color="var(--text-dim)" /> : <ChevronDown size={15} color="var(--text-dim)" />}
@@ -87,18 +187,20 @@ function LessonRow({ lesson, position, onUpdate, onDelete, expanded, onToggle })
             <label className="form-label">Lesson title</label>
             <InlineEdit value={lesson.title} onSave={v => onUpdate(lesson.id, { title: v })} placeholder="Enter lesson title…" />
           </div>
+
           <div className="form-group">
             <label className="form-label">Content type</label>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {CONTENT_TYPES.map(t => {
                 const Icon = t.icon;
                 const active = lesson.content_type === t.value;
                 return (
                   <button key={t.value}
-                    onClick={() => onUpdate(lesson.id, { content_type: t.value })}
+                    onClick={() => onUpdate(lesson.id, { content_type: t.value, content: '' })}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px',
-                      borderRadius: 'var(--radius-sm)', border: active ? '1px solid var(--cyan-border)' : '1px solid var(--border)',
+                      borderRadius: 'var(--radius-sm)',
+                      border: active ? '1px solid var(--cyan-border)' : '1px solid var(--border)',
                       background: active ? 'var(--cyan-dim)' : 'var(--surface2)',
                       color: active ? 'var(--cyan)' : 'var(--text-muted)', cursor: 'pointer', fontSize: 13,
                     }}>
@@ -108,27 +210,41 @@ function LessonRow({ lesson, position, onUpdate, onDelete, expanded, onToggle })
               })}
             </div>
           </div>
-          <div className="form-group">
-            <label className="form-label">
-              {lesson.content_type === 'video' ? 'Video URL' : lesson.content_type === 'quiz' ? 'Quiz instructions' : 'Content'}
-            </label>
-            <InlineEdit
-              value={lesson.content}
-              onSave={v => onUpdate(lesson.id, { content: v })}
-              placeholder={
-                lesson.content_type === 'video' ? 'Paste YouTube or Vimeo URL…'
-                : lesson.content_type === 'quiz' ? 'Describe what the learner needs to do…'
-                : 'Write the lesson content here…'
-              }
-              multiline
-              style={{ fontSize: 13, lineHeight: 1.7 }}
-            />
-          </div>
-          {lesson.content_type === 'video' && lesson.content && (
-            <div style={{ marginTop: 8 }}>
-              <a href={lesson.content} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--cyan)' }}>
-                Open video ↗
-              </a>
+
+          {/* Content area by type */}
+          {lesson.content_type === 'image' ? (
+            <div className="form-group">
+              <label className="form-label">Image</label>
+              <ImageUploader
+                lessonId={lesson.id}
+                existingUrl={lesson.content}
+                onSave={v => onUpdate(lesson.id, { content: v })}
+                showToast={showToast}
+              />
+            </div>
+          ) : (
+            <div className="form-group">
+              <label className="form-label">
+                {lesson.content_type === 'video' ? 'Video URL'
+                  : lesson.content_type === 'quiz' ? 'Quiz instructions'
+                  : 'Content'}
+              </label>
+              <InlineEdit
+                value={lesson.content}
+                onSave={v => onUpdate(lesson.id, { content: v })}
+                placeholder={
+                  lesson.content_type === 'video' ? 'Paste a YouTube or Vimeo URL…'
+                  : lesson.content_type === 'quiz' ? 'Describe what the learner needs to complete…'
+                  : 'Write the lesson content here…'
+                }
+                multiline
+                style={{ fontSize: 13, lineHeight: 1.7 }}
+              />
+              {lesson.content_type === 'video' && lesson.content && (
+                <a href={lesson.content} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--cyan)', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 8 }}>
+                  <ExternalLink size={12} /> Open video
+                </a>
+              )}
             </div>
           )}
         </div>
@@ -142,14 +258,12 @@ export default function ModuleBuilder() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { modules, updateModule, categories, showToast } = useApp();
-  const [lessons, setLessons]     = useState([]);
-  const [loadingL, setLoadingL]   = useState(true);
+  const [lessons, setLessons]   = useState([]);
+  const [loadingL, setLoadingL] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
-  const [saving, setSaving]       = useState(false);
 
   const module = modules.find(m => m.id === id);
 
-  // Load lessons from Supabase
   useEffect(() => {
     if (!id) return;
     supabase.from('lessons').select('*').eq('module_id', id).order('position')
@@ -169,7 +283,6 @@ export default function ModuleBuilder() {
   const cat = categories.find(c => c.key === module.category);
   const levelStyle = LEVEL_STYLES[module.level] || LEVEL_STYLES.Beginner;
 
-  // ── Lesson CRUD ───────────────────────────────────────────
   const addLesson = async () => {
     const position = lessons.length + 1;
     const { data, error } = await supabase.from('lessons')
@@ -189,27 +302,19 @@ export default function ModuleBuilder() {
   const deleteLesson = async (lessonId) => {
     const { error } = await supabase.from('lessons').delete().eq('id', lessonId);
     if (error) { showToast('Failed to delete lesson', 'error'); return; }
-    setLessons(prev => prev.filter(l => l.id !== lessonId));
-    // Re-number positions
     const remaining = lessons.filter(l => l.id !== lessonId);
     remaining.forEach((l, i) => supabase.from('lessons').update({ position: i + 1 }).eq('id', l.id));
+    setLessons(remaining);
     showToast('Lesson deleted');
-  };
-
-  const saveModuleSettings = async (field, value) => {
-    setSaving(true);
-    await updateModule(id, { [field]: value });
-    setSaving(false);
   };
 
   return (
     <div style={{ maxWidth: 820 }}>
-      {/* Back nav */}
       <button className="btn btn-ghost btn-sm" onClick={() => navigate('/modules')} style={{ marginBottom: 20 }}>
         <ArrowLeft size={14} /> Back to modules
       </button>
 
-      {/* Module header */}
+      {/* Module header card */}
       <div className="card" style={{ marginBottom: 24, padding: '20px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
           <div style={{ width: 46, height: 46, borderRadius: 12, background: 'var(--cyan-dim)', border: '1px solid var(--cyan-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -225,24 +330,11 @@ export default function ModuleBuilder() {
               {cat && <span className="badge" style={{ background: cat.color + '22', color: cat.color }}>{cat.label}</span>}
               {module.level && <span className="badge" style={{ background: levelStyle.bg, color: levelStyle.color }}>{module.level}</span>}
             </div>
-            <InlineEdit
-              value={module.title}
-              onSave={v => saveModuleSettings('title', v)}
-              placeholder="Module title"
-              style={{ fontSize: 20, fontWeight: 600, marginBottom: 6 }}
-            />
-            <InlineEdit
-              value={module.description}
-              onSave={v => saveModuleSettings('description', v)}
-              placeholder="Add a description…"
-              multiline
-              style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}
-            />
+            <InlineEdit value={module.title} onSave={v => updateModule(id, { title: v })} placeholder="Module title" style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }} />
+            <InlineEdit value={module.description} onSave={v => updateModule(id, { description: v })} placeholder="Add a description…" multiline style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }} />
           </div>
         </div>
-
-        {/* Stats row */}
-        <div style={{ display: 'flex', gap: 20, marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 24, marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
           {[
             { label: 'Duration', value: formatDuration(module.duration) },
             { label: 'Lessons', value: lessons.length },
@@ -257,21 +349,19 @@ export default function ModuleBuilder() {
         </div>
       </div>
 
-      {/* Lessons section */}
+      {/* Lessons */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 2 }}>Lessons</div>
-          <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{lessons.length} lesson{lessons.length !== 1 ? 's' : ''} — click a lesson to edit its content</div>
+          <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{lessons.length} lesson{lessons.length !== 1 ? 's' : ''} — click to expand and edit</div>
         </div>
-        <button className="btn btn-primary" onClick={addLesson}>
-          <Plus size={14} /> Add lesson
-        </button>
+        <button className="btn btn-primary" onClick={addLesson}><Plus size={14} /> Add lesson</button>
       </div>
 
       {loadingL ? (
         <div style={{ color: 'var(--text-dim)', padding: '20px 0', fontSize: 13 }}>Loading lessons…</div>
       ) : lessons.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '48px 20px', background: 'var(--surface)', border: '1px dashed var(--border-strong)', borderRadius: 'var(--radius-lg)' }}>
+        <div style={{ textAlign: 'center', padding: '48px 20px', background: 'var(--surface)', border: '2px dashed var(--border-strong)', borderRadius: 'var(--radius-lg)' }}>
           <BookOpen size={28} color="var(--text-dim)" style={{ marginBottom: 12, opacity: 0.4 }} />
           <p style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 16 }}>No lessons yet — add the first one to get started.</p>
           <button className="btn btn-primary" onClick={addLesson}><Plus size={14} /> Add first lesson</button>
@@ -287,6 +377,7 @@ export default function ModuleBuilder() {
               onDelete={deleteLesson}
               expanded={expandedId === lesson.id}
               onToggle={() => setExpandedId(expandedId === lesson.id ? null : lesson.id)}
+              showToast={showToast}
             />
           ))}
           <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', marginTop: 4 }} onClick={addLesson}>
