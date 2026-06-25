@@ -17,7 +17,15 @@ create table if not exists public.staff (
   email       text unique,
   avatar      text not null default '',
   color       text not null default '#00D4B8',
-  is_admin    boolean not null default false,
+  is_admin        boolean not null default false,
+  bio             text,
+  skills          text,
+  location        text,
+  phone           text,
+  linkedin        text,
+  learning_goals  text,
+  career_goals    text,
+  learning_style  text,
   created_at  timestamptz not null default now()
 );
 

@@ -1,16 +1,28 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 import {
   LayoutDashboard, BookOpen, Users, ClipboardList,
-  BarChart2, Award, Book, Compass, LogOut, UserCog,
+  BarChart2, Award, Book, Compass, LogOut, UserCircle,
 } from 'lucide-react';
 
 export function Topbar() {
   const { view, setView, stats } = useApp();
   const { profile, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
+  const [photoUrl, setPhotoUrl] = useState(null);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    const { data } = supabase.storage.from('profiles').getPublicUrl(`avatars/${profile.id}`);
+    if (data?.publicUrl) {
+      const img = new Image();
+      img.onload = () => setPhotoUrl(data.publicUrl + '?t=' + Date.now());
+      img.src = data.publicUrl;
+    }
+  }, [profile?.id]);
 
   const switchView = (v) => {
     setView(v);
@@ -32,7 +44,6 @@ export function Topbar() {
           </span>
         )}
 
-        {/* Only show admin toggle to admin users */}
         {isAdmin && (
           <div className="view-toggle">
             <button className={`view-btn ${view === 'admin' ? 'active' : ''}`} onClick={() => switchView('admin')}>Admin</button>
@@ -40,7 +51,6 @@ export function Topbar() {
           </div>
         )}
 
-        {/* User info + sign out */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)' }}>{profile?.name || 'User'}</div>
@@ -48,7 +58,22 @@ export function Topbar() {
               {profile?.is_admin ? 'Admin' : 'Staff'}
             </div>
           </div>
-          <div className="avatar-btn" style={{ cursor: 'default' }}>{profile?.avatar || '?'}</div>
+
+          {/* Clickable avatar → profile page */}
+          <button
+            onClick={() => navigate('/profile')}
+            title="My profile"
+            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', borderRadius: '50%' }}
+          >
+            {photoUrl ? (
+              <img src={photoUrl} alt={profile?.name} style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--cyan-border)' }} />
+            ) : (
+              <div className="avatar-btn" style={{ background: profile?.color ? profile.color + '22' : 'var(--cyan)', color: profile?.color || 'var(--navy)' }}>
+                {profile?.avatar || '?'}
+              </div>
+            )}
+          </button>
+
           <button
             onClick={signOut}
             title="Sign out"
@@ -69,25 +94,28 @@ export function Sidebar() {
   const { isAdmin } = useAuth();
 
   const adminNav = [
-    { to: '/dashboard',    label: 'Dashboard',      icon: LayoutDashboard },
-    { to: '/modules',      label: 'Modules',        icon: BookOpen },
+    { to: '/dashboard',    label: 'Dashboard',       icon: LayoutDashboard },
+    { to: '/modules',      label: 'Modules',         icon: BookOpen },
     { group: 'People' },
-    { to: '/staff',        label: 'Staff',          icon: Users },
-    { to: '/plans',        label: 'Learning plans', icon: ClipboardList },
+    { to: '/staff',        label: 'Staff',           icon: Users },
+    { to: '/plans',        label: 'Learning plans',  icon: ClipboardList },
     { group: 'Reports' },
     { to: '/reports',      label: 'Progress report', icon: BarChart2 },
-    { to: '/certificates', label: 'Certificates',   icon: Award },
+    { to: '/certificates', label: 'Certificates',    icon: Award },
+    { group: 'Account' },
+    { to: '/profile',      label: 'My profile',      icon: UserCircle },
   ];
 
   const learnerNav = [
     { group: 'My learning' },
-    { to: '/my-plan',          label: 'My plan',         icon: Book },
-    { to: '/explore',          label: 'Explore modules', icon: Compass },
+    { to: '/my-plan',         label: 'My plan',         icon: Book },
+    { to: '/explore',         label: 'Explore modules', icon: Compass },
     { group: 'Achievements' },
-    { to: '/my-certificates',  label: 'My certificates', icon: Award },
+    { to: '/my-certificates', label: 'My certificates', icon: Award },
+    { group: 'Account' },
+    { to: '/profile',         label: 'My profile',      icon: UserCircle },
   ];
 
-  // Staff users only see their own learner nav
   const nav = (isAdmin && view === 'admin') ? adminNav : learnerNav;
 
   return (

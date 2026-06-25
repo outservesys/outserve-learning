@@ -11,6 +11,7 @@ import Staff from './pages/Staff';
 import Plans from './pages/Plans';
 import { Reports, Certificates } from './pages/Reports';
 import { MyPlan, Explore, MyCertificates } from './pages/Learner';
+import Profile from './pages/Profile';
 
 function Spinner() {
   return (
@@ -62,6 +63,7 @@ function AppShell() {
             <Route path="/my-plan"          element={<MyPlan />} />
             <Route path="/explore"          element={<Explore />} />
             <Route path="/my-certificates"  element={<MyCertificates />} />
+            <Route path="/profile"          element={<Profile />} />
 
             <Route path="*" element={<Navigate to={defaultPath} replace />} />
           </Routes>
